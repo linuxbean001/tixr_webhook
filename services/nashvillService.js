@@ -209,7 +209,7 @@ const subscribeEvent = async (contacts,orderData) => {
       await wait(retryAfter);
       return subscribeEvent(contacts); // Retry the request
     }
-    trackKlaviyo(orderData)
+    await trackKlaviyo(orderData)
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
@@ -232,7 +232,6 @@ const postUserInfo = async (req, orderData) => {
       ).then((data) => {
         console.log('post data', data.data)
       })
-
       const subscribeResult = await subscribeEvent(req,orderData);
       break;
     } catch (error) {

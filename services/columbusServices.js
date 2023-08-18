@@ -221,6 +221,8 @@ const subscribeEvent = async (contacts) => {
   }
 };
 
+//paste afataavaaha
+
 // Post UserInformation Klaviyo
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000; // 1 second
