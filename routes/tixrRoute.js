@@ -4,7 +4,7 @@ const router = express.Router();
 
 const { getNashvilleUser} = require('../services/nashvillService')
 const {getColumbusUser} = require('../services/columbusServices')
-
+const {getHashkey} = require('../services/nashvillService')
 
 
 router.get("/getNashvilleUser", getNashvilleUser);

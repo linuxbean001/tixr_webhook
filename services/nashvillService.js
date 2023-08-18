@@ -1,69 +1,7 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
-const TixrModel = require('../models/user.model');
-
-const fetchCustomFormSubmissions = async (orderId, timestamp, cpk, hash) => {
-  const url = `${process.env.TIXR_URL}/v1/orders/${orderId}/custom-form-submissions?cpk=${cpk}&t=${timestamp}&hash=${hash}`;
-  const response = await axios.get(url);
-  response.data.map((details) => {
-    details.ticket_submissions.map((items) => {
-      const dataArray = items.answers
-      const extractMobileNumbers = (dataArray) => {
-        const mobileNumbers = [];
-        const mobileNumberRegex = /^[0-9]{10}$/; // Assuming mobile numbers are 10 digits long
-        for (const item of dataArray) {
-          if (item.answer && mobileNumberRegex.test(item.answer)) {
-            mobileNumbers.push(item.answer);
-          }
-        }
-        return mobileNumbers;
-      };
-      const mobileNumbers = extractMobileNumbers(dataArray);
-    })
-  })
-  return response.data;
-};
-
-const processValueData = async (value, attendeeInfo) => {
-  // console.log(attendeeInfo)
-  const { orderId, first_name, last_name, email, geo_info, country_code, purchase_date, event_name } = value;
-  const timestamp = Math.floor(Date.now());
-  const dataToHash = `/v1/orders/${orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
-  const algorithm = "sha256";
-  const hash = crypto
-    .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
-    .update(dataToHash)
-    .digest("hex");
-
-  const details = await fetchCustomFormSubmissions(orderId, timestamp, process.env.NASHVILLE_CPK_KEY, hash);
-  const mobileNumbers = [];
-
-  if (details && details.ticket_submissions) {
-    for (const item of details.ticket_submissions) {
-      if (item.answers && Array.isArray(item.answers)) {
-        for (const answer of item.answers) {
-          if (answer.answer && mobileNumberRegex.test(answer.answer)) {
-            mobileNumbers.push(answer.answer);
-          }
-        }
-      }
-    }
-  }
-  const tixrData = new TixrModel({
-    first_name,
-    last_name,
-    email,
-    geo_info,
-    country_code,
-    purchase_date,
-    orderId,
-    event_name,
-    phone_number: mobileNumbers.join(', ')
-  });
-  await tixrData.save();
-};
-
+console.log(process.env.Klaviyo_API_Key)
 const getNashvilleUser = async (req, res) => {
   try {
     const timestamp = Math.floor(Date.now());
@@ -71,106 +9,182 @@ const getNashvilleUser = async (req, res) => {
       cpk: process.env.NASHVILLE_CPK_KEY,
       end_date: req.query.end_date,
       page_number: req.query.page,
-      page_size: req.query.page_size || 10,
+      page_size: req.query.page_size,
       start_date: req.query.start_date,
       status: "",
       t: timestamp,
     });
-
     const attendeeInfo = {
       profiles: [],
     };
 
-
-    const groupResponse = await fetch(`${process.env.TIXR_URL}/v1/groups?cpk=${process.env.NASHVILLE_CPK_KEY}`);
+    const groupResponse = await fetch(
+      `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.NASHVILLE_CPK_KEY}`
+    );
     const groupData = await groupResponse.json();
 
     const valuePromises = groupData.map(async (element) => {
-      const dataToHash = `/v1/groups/${element.id}/orders?${queryParams.toString()}`;
+      const dataToHash = `/v1/groups/${element.id
+        }/orders?${queryParams.toString()}`;
       const algorithm = "sha256";
       const hash = crypto
         .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
         .update(dataToHash)
         .digest("hex");
-
-      const orderResponse = await axios.get(`${process.env.TIXR_URL}${dataToHash}&hash=${hash}`, {
-        headers: {
-          Accept: "application/json",
-        },
-      });
+      const orderResponse = await axios.get(
+        `${process.env.TIXR_URL}${dataToHash}&hash=${hash}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
       const orderData = orderResponse.data;
-      orderData.map((details) => {
-        attendeeInfo.profiles.push({
-          first_name: details.first_name,
-          last_name: details.lastname,
-          email: details.email,
-          phone_number:
-          +13144965652,
-          $city:
-            details && details.geo_info && details.geo_info.city
-              ? details.geo_info.city
-              : "",
-          latitude:
-            details && details.geo_info && details.geo_info.latitude
-              ? details.geo_info.latitude
-              : "",
-          longitude:
-            details && details.geo_info && details.geo_info.longitude
-              ? details.geo_info.longitude
-              : "",
-          country_code: details.country_code,
-          purchase_date: details.purchase_date,
-          orderId: details.orderId,
-          event_name: details.event_name,
-        });
-        postUserInfo(attendeeInfo)
-      })
-    
-      return orderData.map(value => processValueData(value, attendeeInfo));
-    });
+      orderData.map(async (details) => {
+        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
+        const algorithm = "sha256";
+        const hash = crypto
+          .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
+          .update(dataToHash)
+          .digest("hex");
+        axios
+          .get(
+            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+            {
+              headers: {
+                Accept: "application/json",
+              },
+            }
+          )
+          .then((data) => {
+            data.data.forEach(function (values) {
+              values.ticket_submissions.length == 0
+                ? values.order_submissions[2].answers.map((items) => {
+                  mobNumber = items.answer;
+                  const normalizePhoneNumber = (mobNumber) => {
+                    const digitsOnly = mobNumber.replace(/\D/g, "");
+                    if (digitsOnly.length < 10) {
+                      return null; // Invalid phone number
+                    }
 
+                    const countryCode =
+                      digitsOnly.length === 11
+                        ? "+" + digitsOnly.charAt(0)
+                        : "+1";
+
+                    const areaCode = digitsOnly.substr(countryCode.length, 3);
+                    const phoneDigits = digitsOnly.substr(
+                      countryCode.length + areaCode.length
+                    );
+
+                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
+                      0,
+                      3
+                    )}-${phoneDigits.slice(3)}`;
+
+                    return formattedPhoneNumber;
+                  };
+                  let phoneNumber = "11" + items.answer;
+                  const standardizedPhoneNumber1 =
+                    normalizePhoneNumber(phoneNumber);
+                  attendeeInfo.profiles.push({
+                    first_name: details.first_name,
+                    last_name: details.lastname,
+                    email: details.email,
+                    phone_number: standardizedPhoneNumber1,
+                    $city:
+                      details && details.geo_info && details.geo_info.city
+                        ? details.geo_info.city
+                        : "",
+                    latitude:
+                      details && details.geo_info && details.geo_info.latitude
+                        ? details.geo_info.latitude
+                        : "",
+                    longitude:
+                      details &&
+                        details.geo_info &&
+                        details.geo_info.longitude
+                        ? details.geo_info.longitude
+                        : "",
+                    country_code: details.country_code,
+                    purchase_date: details.purchase_date,
+                    orderId: details.orderId,
+                    event_name: details.event_name,
+                  });
+                  postUserInfo(attendeeInfo, orderData);
+                })
+                : values.ticket_submissions[2].answers.map((items) => {
+                  mobNumber = items.answer;
+                  const normalizePhoneNumber = (mobNumber) => {
+                    const digitsOnly = mobNumber.replace(/\D/g, "");
+                    if (digitsOnly.length < 10) {
+                      return null; // Invalid phone number
+                    }
+                    const countryCode =
+                      digitsOnly.length === 11
+                        ? "+" + digitsOnly.charAt(0)
+                        : "+1";
+                    const areaCode = digitsOnly.substr(countryCode.length, 3);
+                    const phoneDigits = digitsOnly.substr(
+                      countryCode.length + areaCode.length
+                    );
+                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
+                      0,
+                      3
+                    )}-${phoneDigits.slice(3)}`;
+                    return formattedPhoneNumber;
+                  };
+                  let phoneNumber = "11" + items.answer;
+                  const standardizedPhoneNumber1 =
+                    normalizePhoneNumber(phoneNumber);
+                  attendeeInfo.profiles.push({
+                    first_name: details.first_name,
+                    last_name: details.lastname,
+                    email: details.email,
+                    phone_number: standardizedPhoneNumber1,
+                    $city:
+                      details && details.geo_info && details.geo_info.city
+                        ? details.geo_info.city
+                        : "",
+                    latitude:
+                      details && details.geo_info && details.geo_info.latitude
+                        ? details.geo_info.latitude
+                        : "",
+                    longitude:
+                      details &&
+                        details.geo_info &&
+                        details.geo_info.longitude
+                        ? details.geo_info.longitude
+                        : "",
+                    country_code: details.country_code,
+                    purchase_date: details.purchase_date,
+                    orderId: details.orderId,
+                    event_name: details.event_name,
+                  });
+                  postUserInfo(attendeeInfo, orderData);
+                });
+            });
+          });
+      });
+         res.status(200).json({
+        result: orderData,
+        success: true,
+        message: `Total Record ${orderData.length}`
+      });
+    });
     await Promise.all(valuePromises);
-    // ... your existing attendeeInfo processing ...
-    res.status(200).json({
-      result: attendeeInfo.profiles,
-      success: true,
-      message: `Attendee Details Post Successfully ${attendeeInfo.profiles.length}`,
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while processing the request.",
     });
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "An error occurred while fetching data" });
   }
 };
 
-
-//Post UserInformation Klaviyo
-const postUserInfo = async (req, res) => {
-  // console.log(req)
-  // setTimeout(() => {
-  //   subscribeEvent(req);
-  // }, 5000)
-
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const subscribeEvent = async (contacts,orderData) => {
   try {
-    await axios
-      .post(
-        `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=pk_24b1f27b5f87171695ae0795efa61c38a9`,
-        req
-      )
-      .then((data) => {
-        console.log(data)
-      }).catch((erre)=>{
-        console.log(erre)
-      })
-
-    return { success: true, message: "Attendee Details Post wait" }; // Return the response data
-  } catch (error) {
-  }
-};
-
-// Subscribe the user event
-const subscribeEvent = async (contacts) => {
-  contacts.profiles.map((subscribe_user) => {
-    const url = `https://a.klaviyo.com/api/v2/list/XtR3dQ/subscribe?api_key=pk_24b1f27b5f87171695ae0795efa61c38a9`;
+    const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/subscribe?api_key=${process.env.Klaviyo_API_Key}`;
     const options = {
       method: "POST",
       headers: {
@@ -178,51 +192,93 @@ const subscribeEvent = async (contacts) => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        profiles: [
-          { email: subscribe_user.email },
-          { phone_number: subscribe_user.phone_number, sms_consent: true },
-        ],
+        profiles: contacts.profiles.map((subscribe_user) => ({
+          email: subscribe_user.email,
+          phone_number: subscribe_user.phone_number,
+          sms_consent: true,
+        })),
       }),
     };
-    fetch(url, options)
-      .then((res) => res.json())
-      .then((json) => console.log(json))
-      // req.end()
-      .catch((err) => console.error("error:" + err));
-  });
+
+    const response = await fetch(url, options);
+    const responseBody = await response.json();
+
+    if (response.status === 429 && responseBody.error === "throttled") {
+      const retryAfter = responseBody.retry_after * 1000; // Convert to milliseconds
+      console.log(`Throttled. Retrying in ${retryAfter / 1000} seconds.`);
+      await wait(retryAfter);
+      return subscribeEvent(contacts); // Retry the request
+    }
+    trackKlaviyo(orderData)
+    return responseBody;
+  } catch (error) {
+    console.error("Error:", error);
+    throw error;
+  }
+};
+
+// Post UserInformation Klaviyo
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 1000; // 1 second
+
+const postUserInfo = async (req, orderData) => {
+  let retries = 0;
+
+  while (retries < MAX_RETRIES) {
+    try {
+      await axios.post(
+        `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Klaviyo_API_Key}`,
+        req
+      ).then((data) => {
+        console.log('post data', data.data)
+      })
+
+      const subscribeResult = await subscribeEvent(req,orderData);
+      break;
+    } catch (error) {
+      console.error({ postApi: error });
+
+      if (error.response && error.response.status === 429) {
+        const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
+        await new Promise((resolve) => setTimeout(resolve, retryAfter));
+        retries++;
+      } else {
+        break;
+      }
+    }
+  }
 };
 
 const trackKlaviyo = (res) => {
   res.map((events) => {
-    const travkItem = {
+    let data = JSON.stringify({
       token: "SZcjpi",
       event: events.event_name,
       customer_properties: {
-        $email: events.email,
-        $first_name: events.first_name,
-        $last_name: events.lastname,
-        $phone_number: events.phone_number,
-      },
-      properties: {
-        // item_name: events.sale_items[0].name,
-        $value: events.net,
-        orderId: events.orderId,
-        status: events.status,
-        items: events.sale_items,
-      },
-    }
-    const options3 = {
-      method: "post",
-      url: `${process.env.KLAVIYO_URL}/api/track`,
+        email: events.email,
+        first_name: events.first_name,
+        last_name: events.lastname,
+        phone_number: events.phone_number,
+      }
+    });
+
+    let config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: 'https://a.klaviyo.com/api/track',
       headers: {
-        Accept: "text/html",
-        "Content-Type": "application/x-www-form-urlencoded",
+        'Content-Type': 'application/json'
       },
-      data: JSON.stringify(travkItem),
+      data: data
     };
-    axios(options3)
-      .then((response) => response.data)
-      .catch((error) => console.error("facing error", error));
+
+    axios.request(config)
+      .then((response) => {
+        console.log(JSON.stringify(response.data));
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   });
 };
 
