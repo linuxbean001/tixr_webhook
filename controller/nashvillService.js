@@ -184,7 +184,7 @@ const getNashvilleUser = async (req, res) => {
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const subscribeEvent = async (contacts,orderData) => {
   try {
-    const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/subscribe?api_key=${process.env.Klaviyo_API_Key}`;
+    const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/subscribe?api_key=${process.env.Nashville_Klaviyo_API_Key}`;
     const options = {
       method: "POST",
       headers: {
@@ -227,7 +227,7 @@ const postUserInfo = async (req, orderData) => {
   while (retries < MAX_RETRIES) {
     try {
       await axios.post(
-        `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Klaviyo_API_Key}`,
+        `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
         req
       ).then((data) => {
         console.log('post data', data.data)

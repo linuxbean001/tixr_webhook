@@ -243,7 +243,7 @@ const postUserInfo = async (req, res, next) => {
     }
 
     const response = await axios.post(
-      `${process.env.KLAVIYO_URL}/v2/list/XSNnkJ/members?api_key=pk_019d39a10598240f0350fc93c6e07acbcc`,
+      `${process.env.KLAVIYO_URL}/v2/list/XSNnkJ/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
       { profiles: filteredProfiles }
     );
 
