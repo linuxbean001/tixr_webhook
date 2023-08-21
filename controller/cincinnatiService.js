@@ -1,14 +1,12 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
-const TixrModel = require("../models/user.model");
-const { configDotenv } = require("dotenv");
 
-const getColumbusUser = async (req, res) => {
+const getCincinnatiUser = async (req, res,next) => {
   try {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
-      cpk: process.env.COLUMBUS_CPK_KEY,
+      cpk: process.env.CINCINNATI_CPK_KEY,
       end_date: req.query.end_date,
       page_number: req.query.page,
       page_size: req.query.page_size,
@@ -21,7 +19,7 @@ const getColumbusUser = async (req, res) => {
     };
 
     const groupResponse = await fetch(
-      `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.COLUMBUS_CPK_KEY}`
+      `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.CINCINNATI_CPK_KEY}`
     );
     const groupData = await groupResponse.json();
 
@@ -31,7 +29,7 @@ const getColumbusUser = async (req, res) => {
       }/orders?${queryParams.toString()}`;
       const algorithm = "sha256";
       const hash = crypto
-        .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
+        .createHmac(algorithm, process.env.CINCINNATI_PRIVATE_KEY)
         .update(dataToHash)
         .digest("hex");
       const orderResponse = await axios.get(
@@ -44,15 +42,15 @@ const getColumbusUser = async (req, res) => {
       );
       const orderData = orderResponse.data;
       orderData.map(async (details) => {
-        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}`;
+        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.CINCINNATI_CPK_KEY}&t=${timestamp}`;
         const algorithm = "sha256";
         const hash = crypto
-          .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
+          .createHmac(algorithm, process.env.CINCINNATI_PRIVATE_KEY)
           .update(dataToHash)
           .digest("hex");
         axios
           .get(
-            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.CINCINNATI_CPK_KEY}&t=${timestamp}&hash=${hash}`,
             {
               headers: {
                 Accept: "application/json",
@@ -165,7 +163,7 @@ const getColumbusUser = async (req, res) => {
                       orderId: details.orderId,
                       event_name: details.event_name,
                     });
-                    postUserInfo(attendeeInfo, res);
+                    postUserInfo({ profiles: attendeeInfo.profiles }, res, next);
                   });
             });
           });
@@ -179,15 +177,17 @@ const getColumbusUser = async (req, res) => {
     });
     await Promise.all(valuePromises);
   } catch (err) {
-    res.status(500).json({
-     error: err.message || JSON.stringify(err), success: false })
-      }
+    return next(err)
+  }
+    // res.status(500).json({
+    //  error: err.message || JSON.stringify(err), success: false })
+    //   }
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const subscribeEvent = async (contacts) => {
   try {
-    const url = `https://a.klaviyo.com/api/v2/list/YfrE9p/subscribe?api_key=pk_26e1f66120bffbd998d176a321f4e10d58`;
+    const url = `https://a.klaviyo.com/api/v2/list/XSNnkJ/subscribe?api_key=pk_019d39a10598240f0350fc93c6e07acbcc`;
     const options = {
       method: "POST",
       headers: {
@@ -221,66 +221,41 @@ const subscribeEvent = async (contacts) => {
   }
 };
 
-//paste afataavaaha
-
-// Post UserInformation Klaviyo
+// / Post UserInformation Klaviyo
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000; // 1 second
+const registeredProfiles = new Set(); // Set to store registered emails and names
 
-const postUserInfo = async (req, res) => {
-  let retries = 0;
-  
-  while (retries < MAX_RETRIES) {
-    try {
-      await axios.post(
-        `${process.env.KLAVIYO_URL}/v2/list/YfrE9p/members?api_key=pk_26e1f66120bffbd998d176a321f4e10d58`,
-        req
-      ).then((data)=>{
-        console.log('post data',data.data)
-      })
-
-      const subscribeResult = await subscribeEvent(req);
-      // console.log(subscribeResult)
-      // Success! Break out of the retry loop.
-      break;
-    } catch (error) {
-      console.error({ postApi: error });
-
-      if (error.response && error.response.status === 429) {
-        // Extract the "Retry-After" header value in milliseconds
-        const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
-
-        // Wait for the specified duration before retrying
-        await new Promise((resolve) => setTimeout(resolve, retryAfter));
-
-        // Increase the backoff duration for subsequent retries
-        retries++;
-      } else {
-        // Handle other errors if needed
-        break;
+const postUserInfo = async (req, res, next) => {
+  try {
+    const filteredProfiles = req.profiles.filter((profile) => {
+      const key = `${profile.email}-${profile.first_name}-${profile.last_name}`;
+      if (!registeredProfiles.has(key)) {
+        registeredProfiles.add(key);
+        return true; // Include the profile for sending
       }
+      return false; // Skip the profile, as it's already registered
+    });
+
+    if (filteredProfiles.length === 0) {
+      console.log('No new profiles to send to Klaviyo.');
+      return;
     }
+
+    const response = await axios.post(
+      `${process.env.KLAVIYO_URL}/v2/list/XSNnkJ/members?api_key=pk_019d39a10598240f0350fc93c6e07acbcc`,
+      { profiles: filteredProfiles }
+    );
+
+    console.log('Data sent to Klaviyo:', response.data);
+  } catch (error) {
+    console.error('Error sending data to Klaviyo:', error);
   }
-
-  // Handle the response based on whether the retries were successful
-  // if (retries >= MAX_RETRIES) {
-  //   res.status(500).json({
-  //     success: false,
-  //     message: "Exceeded maximum retries. An error occurred while processing the request.",
-  //   });
-  // } else {
-  //   res.status(200).json({
-  //     success: true,
-  //     message: "Attendee Details Posted and Subscribed Successfully",
-  //   });
-  // }
 };
-
 const trackKlaviyo = (res) => {
     res.map((events) => {
-    
     const travkItem = {
-      token: "SZcjpi",
+      token: "Ri9wyv",
       event: events.event_name,
       customer_properties: {
         email: events.email,
@@ -298,17 +273,7 @@ const trackKlaviyo = (res) => {
         Accept: "text/html",
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      data: JSON.stringify( {
-        "token": "SZcjpi",
-        "event": "PRETTY WOMAN | presented by NightLight",
-        "customer_properties": {
-          "$email":"ninavespa6@gmail.com",
-          "$first_name": "Nina",
-          "$last_name": "Vesp",
-          "$phone_number": ""
-        }
-      
-      }),
+      data: JSON.stringify(travkItem),
     };
     axios(options3)
       .then((response) => console.log(response.data))
@@ -316,4 +281,4 @@ const trackKlaviyo = (res) => {
   });
 };
 
-module.exports = { getColumbusUser };
+module.exports = { getCincinnatiUser };

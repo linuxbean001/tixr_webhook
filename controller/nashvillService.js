@@ -1,7 +1,7 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
-console.log(process.env.Klaviyo_API_Key)
+
 const getNashvilleUser = async (req, res) => {
   try {
     const timestamp = Math.floor(Date.now());
