@@ -209,6 +209,7 @@ const subscribeEvent = async (contacts,orderData) => {
       await wait(retryAfter);
       return subscribeEvent(contacts); // Retry the request
     }
+   
     await trackKlaviyo(orderData)
     return responseBody;
   } catch (error) {

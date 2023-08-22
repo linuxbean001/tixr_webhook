@@ -5,11 +5,15 @@ const axios = require("axios");
 const getColumbusUser = async (req, res) => {
   try {
     const timestamp = Math.floor(Date.now());
+
+     // Define the range of page numbers you want to process
+     const startPage = 1;
+     const endPage = 1120;
     const queryParams = new URLSearchParams({
       cpk: process.env.COLUMBUS_CPK_KEY,
       end_date: req.query.end_date,
       page_number: req.query.page,
-      page_size: req.query.page_size,
+      page_size: req.query.page_size|| 5,
       start_date: req.query.start_date,
       status: "",
       t: timestamp,
@@ -24,6 +28,7 @@ const getColumbusUser = async (req, res) => {
     const groupData = await groupResponse.json();
 
     const valuePromises = groupData.map(async (element) => {
+      // return concurrentLimit(async () => {
       const dataToHash = `/v1/groups/${
         element.id
       }/orders?${queryParams.toString()}`;
@@ -168,12 +173,13 @@ const getColumbusUser = async (req, res) => {
             });
           });
       });
-      // trackKlaviyo(orderData)
+      trackKlaviyo(orderData)
       res.status(200).json({
         result: orderData,
         success: true,
         message: `Total Record ${orderData.length}`
       });
+    // });
     });
     await Promise.all(valuePromises);
   } catch (err) {
@@ -215,6 +221,7 @@ const subscribeEvent = async (contacts) => {
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
+    console.error("Error:", typeof error);
     throw error;
   }
 };
@@ -232,13 +239,13 @@ const postUserInfo = async (req, res) => {
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
         req
       ).then((data)=>{
-        console.log('post data',data.data)
+        // console.log('post data',data.data)
       })
 
-      // const subscribeResult = await subscribeEvent(req);
+      const subscribeResult = await subscribeEvent(req);
       break;
     } catch (error) {
-      console.error({ postApi: error });
+      console.error('postApi', error );
 
       if (error.response && error.response.status === 429) {
         // Extract the "Retry-After" header value in milliseconds
@@ -258,8 +265,8 @@ const postUserInfo = async (req, res) => {
 };
 
 const trackKlaviyo = (res) => {
-    res.map((events) => {
-    const travkItem = {
+  res.map((events) => {
+    let data = JSON.stringify({
       token: "Ri9wyv",
       event: events.event_name,
       customer_properties: {
@@ -267,22 +274,26 @@ const trackKlaviyo = (res) => {
         first_name: events.first_name,
         last_name: events.lastname,
         phone_number: events.phone_number,
-      },
-      
-    };
-    console.log('travkItem',travkItem)
-    const options3 = {
-      method: "post",
-      url: `${process.env.KLAVIYO_URL}/api/track`,
+      }
+    });
+
+    let config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: 'https://a.klaviyo.com/api/track',
       headers: {
-        Accept: "text/html",
-        "Content-Type": "application/x-www-form-urlencoded",
+        'Content-Type': 'application/json'
       },
-      data: JSON.stringify(travkItem),
+      data: data
     };
-    axios(options3)
-      .then((response) => console.log(response.data))
-      .catch((error) => console.error("facing error", error));
+
+    axios.request(config)
+      .then((response) => {
+        console.log(JSON.stringify(response.data));
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   });
 };
 

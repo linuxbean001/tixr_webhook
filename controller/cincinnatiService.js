@@ -247,38 +247,42 @@ const postUserInfo = async (req, res, next) => {
       { profiles: filteredProfiles }
     );
 
-    console.log('Data sent to Klaviyo:', response.data);
   } catch (error) {
     console.error('Error sending data to Klaviyo:', error);
   }
 };
 const trackKlaviyo = (res) => {
-    res.map((events) => {
-    const travkItem = {
-      token: "Ri9wyv",
+  res.map((events) => {
+    let data = JSON.stringify({
+      token: "Suc7vS",
       event: events.event_name,
       customer_properties: {
         email: events.email,
         first_name: events.first_name,
         last_name: events.lastname,
         phone_number: events.phone_number,
-      },
-      
-    };
-    console.log('travkItem',travkItem)
-    const options3 = {
-      method: "post",
-      url: `${process.env.KLAVIYO_URL}/api/track`,
+      }
+    });
+
+    let config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: 'https://a.klaviyo.com/api/track',
       headers: {
-        Accept: "text/html",
-        "Content-Type": "application/x-www-form-urlencoded",
+        'Content-Type': 'application/json'
       },
-      data: JSON.stringify(travkItem),
+      data: data
     };
-    axios(options3)
-      .then((response) => console.log(response.data))
-      .catch((error) => console.error("facing error", error));
+
+    axios.request(config)
+      .then((response) => {
+        console.log(JSON.stringify(response.data));
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   });
 };
+
 
 module.exports = { getCincinnatiUser };
