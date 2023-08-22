@@ -5,7 +5,7 @@ const app = express();
 
 const tixrRouter = require('./routes/tixrRoute');
 const errorHandler = require('./middleWare/errorHandler');
-const port = process.env.PORT;
+const port = process.env.PORT || 9000;
 app.use("/", tixrRouter);
 app.use (errorHandler)
 

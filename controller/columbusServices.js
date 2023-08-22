@@ -50,7 +50,7 @@ const getColumbusUser = async (req, res) => {
           .digest("hex");
         axios
           .get(
-            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+            `${process.env.TIXR_URL}/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
             {
               headers: {
                 Accept: "application/json",
@@ -185,7 +185,7 @@ const getColumbusUser = async (req, res) => {
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const subscribeEvent = async (contacts) => {
   try {
-    const url = `https://a.klaviyo.com/api/v2/list/YfrE9p/subscribe?api_key=pk_26e1f66120bffbd998d176a321f4e10d58`;
+    const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/subscribe?api_key=${process.env.Columbus_Klaviyo_API_Key}`;
     const options = {
       method: "POST",
       headers: {
@@ -229,15 +229,13 @@ const postUserInfo = async (req, res) => {
   while (retries < MAX_RETRIES) {
     try {
       await axios.post(
-        `${process.env.KLAVIYO_URL}/v2/list/YfrE9p/members?api_key=pk_26e1f66120bffbd998d176a321f4e10d58`,
+        `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
         req
       ).then((data)=>{
         console.log('post data',data.data)
       })
 
-      const subscribeResult = await subscribeEvent(req);
-      // console.log(subscribeResult)
-      // Success! Break out of the retry loop.
+      // const subscribeResult = await subscribeEvent(req);
       break;
     } catch (error) {
       console.error({ postApi: error });
