@@ -168,7 +168,7 @@ const getCincinnatiUser = async (req, res,next) => {
             });
           });
       });
-      // trackKlaviyo(orderData)
+      trackKlaviyo(orderData)
       res.status(200).json({
         result: orderData,
         success: true,
@@ -226,31 +226,40 @@ const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000; // 1 second
 const registeredProfiles = new Set(); // Set to store registered emails and names
 
-const postUserInfo = async (req, res, next) => {
-  try {
-    const filteredProfiles = req.profiles.filter((profile) => {
-      const key = `${profile.email}-${profile.first_name}-${profile.last_name}`;
-      if (!registeredProfiles.has(key)) {
-        registeredProfiles.add(key);
-        return true; // Include the profile for sending
+const postUserInfo = async (req, res) => {
+  let retries = 0;
+  
+  while (retries < MAX_RETRIES) {
+    try {
+      await axios.post(
+        `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
+        req
+      ).then((data)=>{
+        // console.log('post data',data.data)
+      })
+
+      const subscribeResult = await subscribeEvent(req);
+      break;
+    } catch (error) {
+      console.error('postApi', error );
+
+      if (error.response && error.response.status === 429) {
+        // Extract the "Retry-After" header value in milliseconds
+        const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
+
+        // Wait for the specified duration before retrying
+        await new Promise((resolve) => setTimeout(resolve, retryAfter));
+
+        // Increase the backoff duration for subsequent retries
+        retries++;
+      } else {
+        // Handle other errors if needed
+        break;
       }
-      return false; // Skip the profile, as it's already registered
-    });
-
-    if (filteredProfiles.length === 0) {
-      console.log('No new profiles to send to Klaviyo.');
-      return;
     }
-
-    const response = await axios.post(
-      `${process.env.KLAVIYO_URL}/v2/list/XSNnkJ/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
-      { profiles: filteredProfiles }
-    );
-
-  } catch (error) {
-    console.error('Error sending data to Klaviyo:', error);
   }
 };
+
 const trackKlaviyo = (res) => {
   res.map((events) => {
     let data = JSON.stringify({
