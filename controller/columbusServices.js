@@ -239,7 +239,7 @@ const postUserInfo = async (req, res) => {
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
         req
       ).then((data)=>{
-        // console.log('post data',data.data)
+        console.log('post data',data.data)
       })
 
       const subscribeResult = await subscribeEvent(req);
