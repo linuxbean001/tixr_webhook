@@ -5,10 +5,6 @@ const axios = require("axios");
 const getColumbusUser = async (req, res) => {
   try {
     const timestamp = Math.floor(Date.now());
-
-     // Define the range of page numbers you want to process
-     const startPage = 1;
-     const endPage = 1120;
     const queryParams = new URLSearchParams({
       cpk: process.env.COLUMBUS_CPK_KEY,
       end_date: req.query.end_date,
@@ -221,7 +217,6 @@ const subscribeEvent = async (contacts) => {
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
-    console.error("Error:", typeof error);
     throw error;
   }
 };
@@ -230,29 +225,75 @@ const subscribeEvent = async (contacts) => {
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000; // 1 second
 
+// const postUserInfo = async (req, res) => {
+//   let retries = 0;
+  
+//   while (retries < MAX_RETRIES) {
+//     try {
+//       await axios.post(
+//         `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
+//         req
+//       ).then((data)=>{
+//         console.log('post data',data.data)
+//       })
+
+//       const subscribeResult = await subscribeEvent(req);
+//       break;
+//     } catch (error) {
+//       console.error('postApi', error );
+
+//       if (error.response && error.response.status === 429) {
+//         // Extract the "Retry-After" header value in milliseconds
+//         const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
+
+//         // Wait for the specified duration before retrying
+//         await new Promise((resolve) => setTimeout(resolve, retryAfter));
+
+//         // Increase the backoff duration for subsequent retries
+//         retries++;
+//       } else {
+//         // Handle other errors if needed
+//         break;
+//       }
+//     }
+//   }
+// };
+
 const postUserInfo = async (req, res) => {
+  const MAX_RETRIES = 3;
+  const INITIAL_BACKOFF_MS = 1000; // 1 second
+
   let retries = 0;
   
   while (retries < MAX_RETRIES) {
     try {
-      await axios.post(
+      const response = await fetch(
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
-        req
-      ).then((data)=>{
-        console.log('post data',data.data)
-      })
+        {
+          method: 'POST',
+          body: JSON.stringify(req),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        data.length? console.log(data.length) : console.log(" completed data")
+      }
 
       const subscribeResult = await subscribeEvent(req);
       break;
     } catch (error) {
       console.error('postApi', error );
 
-      if (error.response && error.response.status === 429) {
-        // Extract the "Retry-After" header value in milliseconds
-        const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
+      if (error instanceof FetchError && error.code === '429') {
+        // Extract the "Retry-After" header value in seconds
+        const retryAfter = parseInt(error.headers.get('Retry-After'), 10) || INITIAL_BACKOFF_MS / 1000;
 
         // Wait for the specified duration before retrying
-        await new Promise((resolve) => setTimeout(resolve, retryAfter));
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
 
         // Increase the backoff duration for subsequent retries
         retries++;
@@ -263,6 +304,8 @@ const postUserInfo = async (req, res) => {
     }
   }
 };
+
+
 
 const trackKlaviyo = (res) => {
   res.map((events) => {

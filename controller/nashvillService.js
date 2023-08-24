@@ -219,43 +219,9 @@ const subscribeEvent = async (contacts,orderData) => {
   }
 };
 
-// Post UserInformation Klaviyo
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000; // 1 second
-
-// const postUserInfo = async (req, orderData) => {
-//   let retries = 0;
-
-//   while (retries < MAX_RETRIES) {
-//     try {
-//       await axios.post(
-//         `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
-//         req
-//       ).then((data) => {
-//         console.log('post data', data.data)
-//       })
-//       const subscribeResult = await subscribeEvent(req,orderData);
-//       break;
-//     } catch (error) {
-//       console.error({ postApi: error });
-
-//       if (error.response && error.response.status === 429) {
-//         const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
-//         await new Promise((resolve) => setTimeout(resolve, retryAfter));
-//         retries++;
-//       } else {
-//         break;
-//       }
-//     }
-//   }
-// };
-
-
 const postUserInfo = async (req, res) => {
   const MAX_RETRIES = 3;
-  const INITIAL_BACKOFF_MS = 1000; // 1 second
-
-  let retries = 0;
+   let retries = 0;
   
   while (retries < MAX_RETRIES) {
     try {
@@ -272,28 +238,17 @@ const postUserInfo = async (req, res) => {
       
       if (response.ok) {
         const data = await response.json();
-        console.log(data.length)
-        // Process data if needed
+        if(data.length){
+          console.log(data.length)
+        }else{
+          console.log('completeed data')
+        }
+ 
       }
-
       const subscribeResult = await subscribeEvent(req);
       break;
     } catch (error) {
       console.error('postApi', error );
-
-      if (error instanceof FetchError && error.code === '429') {
-        // Extract the "Retry-After" header value in seconds
-        const retryAfter = parseInt(error.headers.get('Retry-After'), 10) || INITIAL_BACKOFF_MS / 1000;
-
-        // Wait for the specified duration before retrying
-        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-
-        // Increase the backoff duration for subsequent retries
-        retries++;
-      } else {
-        // Handle other errors if needed
-        break;
-      }
     }
   }
 };
