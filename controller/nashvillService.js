@@ -58,111 +58,51 @@ const getNashvilleUser = async (req, res) => {
           )
           .then((data) => {
             data.data.forEach(function (values) {
-              values.ticket_submissions.length == 0
-                ? values.order_submissions[2].answers.map((items) => {
-                  mobNumber = items.answer;
-                  const normalizePhoneNumber = (mobNumber) => {
-                    const digitsOnly = mobNumber.replace(/\D/g, "");
-                    if (digitsOnly.length < 10) {
-                      return null; // Invalid phone number
-                    }
-
-                    const countryCode =
-                      digitsOnly.length === 11
-                        ? "+" + digitsOnly.charAt(0)
-                        : "+1";
-
-                    const areaCode = digitsOnly.substr(countryCode.length, 3);
-                    const phoneDigits = digitsOnly.substr(
-                      countryCode.length + areaCode.length
-                    );
-
-                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-                      0,
-                      3
-                    )}-${phoneDigits.slice(3)}`;
-
-                    return formattedPhoneNumber;
-                  };
-                  let phoneNumber = "11" + items.answer;
-                  const standardizedPhoneNumber1 =
-                    normalizePhoneNumber(phoneNumber);
-                  attendeeInfo.profiles.push({
-                    first_name: details.first_name,
-                    last_name: details.lastname,
-                    email: details.email,
-                    phone_number: standardizedPhoneNumber1,
-                    $city:
-                      details && details.geo_info && details.geo_info.city
-                        ? details.geo_info.city
-                        : "",
-                    latitude:
-                      details && details.geo_info && details.geo_info.latitude
-                        ? details.geo_info.latitude
-                        : "",
-                    longitude:
-                      details &&
-                        details.geo_info &&
-                        details.geo_info.longitude
-                        ? details.geo_info.longitude
-                        : "",
-                    country_code: details.country_code,
-                    purchase_date: details.purchase_date,
-                    orderId: details.orderId,
-                    event_name: details.event_name,
-                  });
-                  postUserInfo(attendeeInfo, orderData);
-                })
-                : values.ticket_submissions[2].answers.map((items) => {
-                  mobNumber = items.answer;
-                  const normalizePhoneNumber = (mobNumber) => {
-                    const digitsOnly = mobNumber.replace(/\D/g, "");
-                    if (digitsOnly.length < 10) {
-                      return null; // Invalid phone number
-                    }
-                    const countryCode =
-                      digitsOnly.length === 11
-                        ? "+" + digitsOnly.charAt(0)
-                        : "+1";
-                    const areaCode = digitsOnly.substr(countryCode.length, 3);
-                    const phoneDigits = digitsOnly.substr(
-                      countryCode.length + areaCode.length
-                    );
-                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-                      0,
-                      3
-                    )}-${phoneDigits.slice(3)}`;
-                    return formattedPhoneNumber;
-                  };
-                  let phoneNumber = "11" + items.answer;
-                  const standardizedPhoneNumber1 =
-                    normalizePhoneNumber(phoneNumber);
-                  attendeeInfo.profiles.push({
-                    first_name: details.first_name,
-                    last_name: details.lastname,
-                    email: details.email,
-                    phone_number: standardizedPhoneNumber1,
-                    $city:
-                      details && details.geo_info && details.geo_info.city
-                        ? details.geo_info.city
-                        : "",
-                    latitude:
-                      details && details.geo_info && details.geo_info.latitude
-                        ? details.geo_info.latitude
-                        : "",
-                    longitude:
-                      details &&
-                        details.geo_info &&
-                        details.geo_info.longitude
-                        ? details.geo_info.longitude
-                        : "",
-                    country_code: details.country_code,
-                    purchase_date: details.purchase_date,
-                    orderId: details.orderId,
-                    event_name: details.event_name,
-                  });
-                  postUserInfo(attendeeInfo, orderData);
+              const normalizePhoneNumber = (mobNumber) => {
+                const digitsOnly = mobNumber.replace(/\D/g, "");
+              
+                if (digitsOnly.length < 10) {
+                  return null; // Invalid phone number
+                }
+              
+                const countryCode = digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
+                const areaCode = digitsOnly.substr(countryCode.length, 3);
+                const phoneDigits = digitsOnly.substr(countryCode.length + areaCode.length);
+                const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3)}`;
+                return formattedPhoneNumber;
+              };
+              
+              const processSubmission = (items, res) => {
+                mobNumber = items.answer;
+                let phoneNumber = "11" + items.answer;
+                const standardizedPhoneNumber1 = normalizePhoneNumber(phoneNumber);
+                
+                attendeeInfo.profiles.push({
+                  first_name: details.first_name,
+                  last_name: details.lastname,
+                  email: details.email,
+                  phone_number: standardizedPhoneNumber1,
+                  $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+                  latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+                  longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+                  country_code: details.country_code,
+                  purchase_date: details.purchase_date,
+                  orderId: details.orderId,
+                  event_name: details.event_name,
                 });
+              
+                postUserInfo(attendeeInfo, res);
+              };
+              
+              if (values.ticket_submissions.length == 0) {
+                values.order_submissions[2].answers.forEach((items) => {
+                  processSubmission(items, res);
+                });
+              } else {
+                values.ticket_submissions[2].answers.forEach((items) => {
+                  processSubmission(items, res);
+                });
+              }
             });
           });
       });
@@ -241,7 +181,7 @@ const postUserInfo = async (req, res) => {
         if(data.length){
           console.log(data.length)
         }else{
-          console.log('completeed data')
+          console.log('completed data')
         }
  
       }
@@ -278,7 +218,8 @@ const trackKlaviyo = (res) => {
 
     axios.request(config)
       .then((response) => {
-        console.log(JSON.stringify(response.data));
+        const trackData = JSON.stringify(response.data)
+        console.log(trackData.length);
       })
       .catch((error) => {
         console.log(error);
