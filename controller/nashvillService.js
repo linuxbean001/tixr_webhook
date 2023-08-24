@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
+const axios = require("axios");
 
 const getNashvilleUser = async (req, res) => {
   try {
@@ -8,7 +9,7 @@ const getNashvilleUser = async (req, res) => {
       cpk: process.env.NASHVILLE_CPK_KEY,
       end_date: req.query.end_date,
       page_number: req.query.page,
-      page_size: req.query.page_size || 5,
+      page_size: req.query.page_size,
       start_date: req.query.start_date,
       status: "",
       t: timestamp,
@@ -30,41 +31,14 @@ const getNashvilleUser = async (req, res) => {
         .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
         .update(dataToHash)
         .digest("hex");
-
-      const requestUrl = `${process.env.TIXR_URL}${dataToHash}&hash=${hash}`;
-      const options = {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-      };
-
-      const reqPromise = new Promise((resolve, reject) => {
-        const req = https.request(requestUrl, options, (response) => {
-          let responseData = '';
-
-          response.on('data', (chunk) => {
-            responseData += chunk;
-          });
-
-          response.on('end', () => {
-            resolve(responseData);
-          });
-        });
-
-        req.on('error', (error) => {
-          reject(error);
-        });
-
-        req.end();
-      });
-
-      try {
-        const orderResponseData = await reqPromise;
-        // Process orderResponseData
-      } catch (error) {
-        console.error('Error during GET request:', error);
-      }
+      const orderResponse = await axios.get(
+        `${process.env.TIXR_URL}${dataToHash}&hash=${hash}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
       const orderData = orderResponse.data;
       orderData.map(async (details) => {
         const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
@@ -73,175 +47,144 @@ const getNashvilleUser = async (req, res) => {
           .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
           .update(dataToHash)
           .digest("hex");
+        axios
+          .get(
+            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+            {
+              headers: {
+                Accept: "application/json",
+              },
+            }
+          )
+          .then((data) => {
+            data.data.forEach(function (values) {
+              values.ticket_submissions.length == 0
+                ? values.order_submissions[2].answers.map((items) => {
+                  mobNumber = items.answer;
+                  const normalizePhoneNumber = (mobNumber) => {
+                    const digitsOnly = mobNumber.replace(/\D/g, "");
+                    if (digitsOnly.length < 10) {
+                      return null; // Invalid phone number
+                    }
 
-        const requestUrl = `${process.env.TIXR_URL}/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}&hash=${hash}`;
+                    const countryCode =
+                      digitsOnly.length === 11
+                        ? "+" + digitsOnly.charAt(0)
+                        : "+1";
 
-        const options = {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
-        };
+                    const areaCode = digitsOnly.substr(countryCode.length, 3);
+                    const phoneDigits = digitsOnly.substr(
+                      countryCode.length + areaCode.length
+                    );
 
-        const reqPromise = new Promise((resolve, reject) => {
-          const req = https.request(requestUrl, options, (response) => {
-            let responseData = '';
+                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
+                      0,
+                      3
+                    )}-${phoneDigits.slice(3)}`;
 
-            response.on('data', (chunk) => {
-              responseData += chunk;
-            });
-
-            response.on('end', () => {
-              resolve(responseData);
-            });
-          });
-
-          req.on('error', (error) => {
-            reject(error);
-          });
-
-          req.end();
-        });
-
-        try {
-          const orderResponseData = await reqPromise;
-          const data = JSON.parse(orderResponseData);
-
-          data.forEach(function (values) {
-            values.ticket_submissions.length == 0
-              ? values.order_submissions[2].answers.forEach((items) => {
-                mobNumber = items.answer;
-                const normalizePhoneNumber = (mobNumber) => {
-                  const digitsOnly = mobNumber.replace(/\D/g, "");
-
-                  if (digitsOnly.length < 10) {
-                    return null; // Invalid phone number
-                  }
-
-                  const countryCode =
-                    digitsOnly.length === 11
-                      ? "+" + digitsOnly.charAt(0)
-                      : "+1";
-
-                  const areaCode = digitsOnly.substr(countryCode.length, 3);
-                  const phoneDigits = digitsOnly.substr(
-                    countryCode.length + areaCode.length
-                  );
-
-                  const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-                    0,
-                    3
-                  )}-${phoneDigits.slice(3)}`;
-
-                  return formattedPhoneNumber;
-                };
-                let phoneNumber = "11" + items.answer;
-                const standardizedPhoneNumber1 =
-                  normalizePhoneNumber(phoneNumber);
-                attendeeInfo.profiles.push({
-                  first_name: details.first_name,
-                  last_name: details.lastname,
-                  email: details.email,
-                  phone_number: standardizedPhoneNumber1,
-                  $city:
-                    details && details.geo_info && details.geo_info.city
-                      ? details.geo_info.city
-                      : "",
-                  latitude:
-                    details && details.geo_info && details.geo_info.latitude
-                      ? details.geo_info.latitude
-                      : "",
-                  longitude:
-                    details &&
-                      details.geo_info &&
-                      details.geo_info.longitude
-                      ? details.geo_info.longitude
-                      : "",
-                  country_code: details.country_code,
-                  purchase_date: details.purchase_date,
-                  orderId: details.orderId,
-                  event_name: details.event_name,
+                    return formattedPhoneNumber;
+                  };
+                  let phoneNumber = "11" + items.answer;
+                  const standardizedPhoneNumber1 =
+                    normalizePhoneNumber(phoneNumber);
+                  attendeeInfo.profiles.push({
+                    first_name: details.first_name,
+                    last_name: details.lastname,
+                    email: details.email,
+                    phone_number: standardizedPhoneNumber1,
+                    $city:
+                      details && details.geo_info && details.geo_info.city
+                        ? details.geo_info.city
+                        : "",
+                    latitude:
+                      details && details.geo_info && details.geo_info.latitude
+                        ? details.geo_info.latitude
+                        : "",
+                    longitude:
+                      details &&
+                        details.geo_info &&
+                        details.geo_info.longitude
+                        ? details.geo_info.longitude
+                        : "",
+                    country_code: details.country_code,
+                    purchase_date: details.purchase_date,
+                    orderId: details.orderId,
+                    event_name: details.event_name,
+                  });
+                  postUserInfo(attendeeInfo, orderData);
+                })
+                : values.ticket_submissions[2].answers.map((items) => {
+                  mobNumber = items.answer;
+                  const normalizePhoneNumber = (mobNumber) => {
+                    const digitsOnly = mobNumber.replace(/\D/g, "");
+                    if (digitsOnly.length < 10) {
+                      return null; // Invalid phone number
+                    }
+                    const countryCode =
+                      digitsOnly.length === 11
+                        ? "+" + digitsOnly.charAt(0)
+                        : "+1";
+                    const areaCode = digitsOnly.substr(countryCode.length, 3);
+                    const phoneDigits = digitsOnly.substr(
+                      countryCode.length + areaCode.length
+                    );
+                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
+                      0,
+                      3
+                    )}-${phoneDigits.slice(3)}`;
+                    return formattedPhoneNumber;
+                  };
+                  let phoneNumber = "11" + items.answer;
+                  const standardizedPhoneNumber1 =
+                    normalizePhoneNumber(phoneNumber);
+                  attendeeInfo.profiles.push({
+                    first_name: details.first_name,
+                    last_name: details.lastname,
+                    email: details.email,
+                    phone_number: standardizedPhoneNumber1,
+                    $city:
+                      details && details.geo_info && details.geo_info.city
+                        ? details.geo_info.city
+                        : "",
+                    latitude:
+                      details && details.geo_info && details.geo_info.latitude
+                        ? details.geo_info.latitude
+                        : "",
+                    longitude:
+                      details &&
+                        details.geo_info &&
+                        details.geo_info.longitude
+                        ? details.geo_info.longitude
+                        : "",
+                    country_code: details.country_code,
+                    purchase_date: details.purchase_date,
+                    orderId: details.orderId,
+                    event_name: details.event_name,
+                  });
+                  postUserInfo(attendeeInfo, orderData);
                 });
-                postUserInfo(attendeeInfo, res);
-                // Handle logic for ticket_submissions length 0
-              })
-              : values.ticket_submissions[2].answers.forEach((items) => {
-                // Handle logic for ticket_submissions length > 0
-                mobNumber = items.answer;
-                const normalizePhoneNumber = (mobNumber) => {
-                  const digitsOnly = mobNumber.replace(/\D/g, "");
-                  if (digitsOnly.length < 10) {
-                    return null; // Invalid phone number
-                  }
-                  const countryCode =
-                    digitsOnly.length === 11
-                      ? "+" + digitsOnly.charAt(0)
-                      : "+1";
-                  const areaCode = digitsOnly.substr(countryCode.length, 3);
-                  const phoneDigits = digitsOnly.substr(
-                    countryCode.length + areaCode.length
-                  );
-                  const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-                    0,
-                    3
-                  )}-${phoneDigits.slice(3)}`;
-                  return formattedPhoneNumber;
-                };
-                let phoneNumber = "11" + items.answer;
-                const standardizedPhoneNumber1 =
-                  normalizePhoneNumber(phoneNumber);
-                attendeeInfo.profiles.push({
-                  first_name: details.first_name,
-                  last_name: details.lastname,
-                  email: details.email,
-                  phone_number: standardizedPhoneNumber1,
-                  $city:
-                    details && details.geo_info && details.geo_info.city
-                      ? details.geo_info.city
-                      : "",
-                  latitude:
-                    details && details.geo_info && details.geo_info.latitude
-                      ? details.geo_info.latitude
-                      : "",
-                  longitude:
-                    details &&
-                      details.geo_info &&
-                      details.geo_info.longitude
-                      ? details.geo_info.longitude
-                      : "",
-                  country_code: details.country_code,
-                  purchase_date: details.purchase_date,
-                  orderId: details.orderId,
-                  event_name: details.event_name,
-                });
-                postUserInfo(attendeeInfo, res);
-
-              });
+            });
           });
-
-          // Further processing...
-        } catch (error) {
-          console.error('Error during GET request:', error);
-        }
       });
-      trackKlaviyo(orderData)
-      res.status(200).json({
+       
+    await trackKlaviyo(orderData)
+         res.status(200).json({
         result: orderData,
         success: true,
         message: `Total Record ${orderData.length}`
       });
-      // });
     });
     await Promise.all(valuePromises);
   } catch (err) {
     res.status(500).json({
-      error: err.message || JSON.stringify(err), success: false
-    })
+      success: false,
+      message: "An error occurred while processing the request.",
+    });
   }
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const subscribeEvent = async (contacts) => {
+const subscribeEvent = async (contacts,orderData) => {
   try {
     const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/subscribe?api_key=${process.env.Nashville_Klaviyo_API_Key}`;
     const options = {
@@ -266,70 +209,86 @@ const subscribeEvent = async (contacts) => {
       const retryAfter = responseBody.retry_after * 1000; // Convert to milliseconds
       console.log(`Throttled. Retrying in ${retryAfter / 1000} seconds.`);
       await wait(retryAfter);
-
       return subscribeEvent(contacts); // Retry the request
     }
-
+  
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
-    console.error("Error:", typeof error);
     throw error;
   }
 };
 
-// / Post UserInformation Klaviyo
+// Post UserInformation Klaviyo
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000; // 1 second
 
-const postUserInfo = async (req, res) => {
-  let retries = 0;
+// const postUserInfo = async (req, orderData) => {
+//   let retries = 0;
 
+//   while (retries < MAX_RETRIES) {
+//     try {
+//       await axios.post(
+//         `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
+//         req
+//       ).then((data) => {
+//         console.log('post data', data.data)
+//       })
+//       const subscribeResult = await subscribeEvent(req,orderData);
+//       break;
+//     } catch (error) {
+//       console.error({ postApi: error });
+
+//       if (error.response && error.response.status === 429) {
+//         const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
+//         await new Promise((resolve) => setTimeout(resolve, retryAfter));
+//         retries++;
+//       } else {
+//         break;
+//       }
+//     }
+//   }
+// };
+
+
+const postUserInfo = async (req, res) => {
+  const MAX_RETRIES = 3;
+  const INITIAL_BACKOFF_MS = 1000; // 1 second
+
+  let retries = 0;
+  
   while (retries < MAX_RETRIES) {
     try {
-      const options = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-
-      const reqPromise = new Promise((resolve, reject) => {
-        const request = https.request(
-          `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
-          options,
-          (response) => {
-            let responseData = '';
-
-            response.on('data', (chunk) => {
-              responseData += chunk;
-            });
-
-            response.on('end', () => {
-              resolve(responseData);
-            });
+      const response = await fetch(
+        `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(req),
+          headers: {
+            'Content-Type': 'application/json'
           }
-        );
-
-        request.on('error', (error) => {
-          reject(error);
-        });
-
-        request.write(JSON.stringify(req));
-        request.end();
-      });
-
-      const data = await reqPromise;
-      console.log('post data', data);
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(data.length)
+        // Process data if needed
+      }
 
       const subscribeResult = await subscribeEvent(req);
       break;
     } catch (error) {
-      console.error('postApi', error);
+      console.error('postApi', error );
 
-      if (error.response && error.response.status === 429) {
-        const retryAfter = error.response.headers['retry-after'] * 1000 || INITIAL_BACKOFF_MS;
-        await new Promise((resolve) => setTimeout(resolve, retryAfter));
+      if (error instanceof FetchError && error.code === '429') {
+        // Extract the "Retry-After" header value in seconds
+        const retryAfter = parseInt(error.headers.get('Retry-After'), 10) || INITIAL_BACKOFF_MS / 1000;
+
+        // Wait for the specified duration before retrying
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+
+        // Increase the backoff duration for subsequent retries
         retries++;
       } else {
         // Handle other errors if needed
@@ -340,7 +299,7 @@ const postUserInfo = async (req, res) => {
 };
 
 const trackKlaviyo = (res) => {
-  res.forEach((events) => {
+  res.map((events) => {
     let data = JSON.stringify({
       token: "SZcjpi",
       event: events.event_name,
@@ -352,31 +311,23 @@ const trackKlaviyo = (res) => {
       }
     });
 
-    let options = {
-      method: 'POST',
+    let config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: 'https://a.klaviyo.com/api/track',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
+      data: data
     };
 
-    const req = https.request('https://a.klaviyo.com/api/track', options, (response) => {
-      let responseData = '';
-
-      response.on('data', (chunk) => {
-        responseData += chunk;
+    axios.request(config)
+      .then((response) => {
+        console.log(JSON.stringify(response.data));
+      })
+      .catch((error) => {
+        console.log(error);
       });
-
-      response.on('end', () => {
-        console.log(JSON.stringify(responseData));
-      });
-    });
-
-    req.on('error', (error) => {
-      console.log(error);
-    });
-
-    req.write(data);
-    req.end();
   });
 };
 
