@@ -195,7 +195,7 @@ const postUserInfo = async (req, res) => {
       console.error('postApi', error );
     }
   }
-  trackKlaviyo(req)
+  // trackKlaviyo(req)
 };
 
 
@@ -232,7 +232,9 @@ const postUserInfo = async (req, res) => {
 //       });
 //   });
 // };
-
+const agent = new https.Agent({
+  maxSockets: 10 // You can adjust the maximum number of sockets as needed
+});
 
 
 
@@ -256,7 +258,8 @@ const trackKlaviyo = (res) => {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': data.length
-      }
+      },
+      agent: agent // Use the connection pooling agent
     };
 
     let req = https.request(options, (response) => {
