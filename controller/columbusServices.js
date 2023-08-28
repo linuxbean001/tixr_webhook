@@ -1,6 +1,7 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
+const https = require('https');
 
 const getColumbusUser = async (req, res) => {
   try {
@@ -185,7 +186,6 @@ const postUserInfo = async (req, res) => {
            
       if (response.ok) {
         const data = await response.json();
-        console.log(req)
         data.length? console.log(data.length) : console.log(" completed data")
       }
 
@@ -200,8 +200,44 @@ const postUserInfo = async (req, res) => {
 
 
 
+// const trackKlaviyo = (res) => {
+//     res.profiles.map((events) => {
+//     let data = JSON.stringify({
+//       token: "Ri9wyv",
+//       event: events.event_name,
+//       customer_properties: {
+//         email: events.email,
+//         first_name: events.first_name,
+//         last_name: events.lastname,
+//         phone_number: events.phone_number,
+//       }
+//     });
+
+//     let config = {
+//       method: 'post',
+//       maxBodyLength: Infinity,
+//       url: 'https://a.klaviyo.com/api/track',
+//       headers: {
+//         'Content-Type': 'application/json'
+//       },
+//       data: data
+//     };
+
+//     axios.request(config)
+//       .then((response) => {
+//         console.log(JSON.stringify(response.data));
+//       })
+//       .catch((error) => {
+//         console.log(error);
+//       });
+//   });
+// };
+
+
+
+
 const trackKlaviyo = (res) => {
-    res.profiles.map((events) => {
+  res.profiles.map((events) => {
     let data = JSON.stringify({
       token: "Ri9wyv",
       event: events.event_name,
@@ -213,24 +249,37 @@ const trackKlaviyo = (res) => {
       }
     });
 
-    let config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: 'https://a.klaviyo.com/api/track',
+    let options = {
+      hostname: 'a.klaviyo.com',
+      path: '/api/track',
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      },
-      data: data
+        'Content-Type': 'application/json',
+        'Content-Length': data.length
+      }
     };
 
-    axios.request(config)
-      .then((response) => {
-        console.log(JSON.stringify(response.data));
-      })
-      .catch((error) => {
-        console.log(error);
+    let req = https.request(options, (response) => {
+      let responseData = '';
+
+      response.on('data', (chunk) => {
+        responseData += chunk;
       });
+
+      response.on('end', () => {
+        console.log(responseData);
+      });
+    });
+
+    req.on('error', (error) => {
+      console.log(error);
+    });
+
+    req.write(data);
+    req.end();
   });
 };
+
+
 
 module.exports = { getColumbusUser };
