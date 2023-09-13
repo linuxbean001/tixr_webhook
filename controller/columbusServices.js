@@ -23,6 +23,7 @@ const getColumbusUser = async (req, res) => {
       `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.COLUMBUS_CPK_KEY}`
     );
     const groupData = await groupResponse.json();
+    const usersToSendToKlaviyo = [];
 
     const valuePromises = groupData.map(async (element) => {
       // return concurrentLimit(async () => {
@@ -44,6 +45,8 @@ const getColumbusUser = async (req, res) => {
       );
       const orderData = orderResponse.data;
       orderData.map(async (details) => {
+        // Check if the user already exists in Klaviyo (you need to implement this logic)
+        // const userExistsInKlaviyo = await checkIfUserExistsInKlaviyo(details.email);
         const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}`;
         const algorithm = "sha256";
         const hash = crypto
@@ -79,7 +82,7 @@ const getColumbusUser = async (req, res) => {
                 mobNumber = items.answer;
                 let phoneNumber = "11" + items.answer;
                 const standardizedPhoneNumber1 = normalizePhoneNumber(phoneNumber);
-                
+                // if (!userExistsInKlaviyo) {
                 attendeeInfo.profiles.push({
                   first_name: details.first_name,
                   last_name: details.lastname,
@@ -93,6 +96,7 @@ const getColumbusUser = async (req, res) => {
                   orderId: details.orderId,
                   event_name: details.event_name,
                 });
+              // }
               
                 postUserInfo(attendeeInfo, res);
               };
@@ -110,16 +114,17 @@ const getColumbusUser = async (req, res) => {
           });
 
       });
-   
-      
+      await Promise.all(valuePromises);
+      const klaviyoResponse = await sendUsersToKlaviyo(usersToSendToKlaviyo);
       res.status(200).json({
-        result: orderData,
+        result: klaviyoResponse,
         success: true,
         message: `Total Record ${orderData.length}`
       });
     // });
     });
-    await Promise.all(valuePromises);
+    
+    
   } catch (err) {
     res.status(500).json({
      error: err.message || JSON.stringify(err), success: false })
@@ -162,6 +167,8 @@ const subscribeEvent = async (contacts) => {
     throw error;
   }
 };
+
+
 
 
 const postUserInfo = async (req, res) => {

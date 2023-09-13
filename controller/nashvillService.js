@@ -3,17 +3,23 @@ const crypto = require("crypto");
 const axios = require("axios");
 
 const getNashvilleUser = async (req, res) => {
+  console.log(req)
+
+
   try {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
       cpk: process.env.NASHVILLE_CPK_KEY,
       end_date: req.query.end_date,
       page_number: req.query.page,
+     
       page_size: req.query.page_size,
       start_date: req.query.start_date,
+    
       status: "",
       t: timestamp,
     });
+    console.log(URLSearchParams.cpk)
     const attendeeInfo = {
       profiles: [],
     };
@@ -22,7 +28,6 @@ const getNashvilleUser = async (req, res) => {
       `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.NASHVILLE_CPK_KEY}`
     );
     const groupData = await groupResponse.json();
-
     const valuePromises = groupData.map(async (element) => {
       const dataToHash = `/v1/groups/${element.id
         }/orders?${queryParams.toString()}`;
@@ -40,6 +45,7 @@ const getNashvilleUser = async (req, res) => {
         }
       );
       const orderData = orderResponse.data;
+      
       orderData.map(async (details) => {
         const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
         const algorithm = "sha256";
@@ -57,6 +63,7 @@ const getNashvilleUser = async (req, res) => {
             }
           )
           .then((data) => {
+            console.log(data)
             data.data.forEach(function (values) {
               const normalizePhoneNumber = (mobNumber) => {
                 const digitsOnly = mobNumber.replace(/\D/g, "");
@@ -106,8 +113,8 @@ const getNashvilleUser = async (req, res) => {
             });
           });
       });
-       
-    await trackKlaviyo(orderData)
+      
+    // await trackKlaviyo(orderData)
          res.status(200).json({
         result: orderData,
         success: true,
@@ -116,6 +123,7 @@ const getNashvilleUser = async (req, res) => {
     });
     await Promise.all(valuePromises);
   } catch (err) {
+    console.log(err)
     res.status(500).json({
       success: false,
       message: "An error occurred while processing the request.",
@@ -183,8 +191,7 @@ const postUserInfo = async (req, res) => {
         }else{
           console.log('completed data')
         }
- 
-      }
+       }
       const subscribeResult = await subscribeEvent(req);
       break;
     } catch (error) {
