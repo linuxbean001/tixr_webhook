@@ -1,29 +1,24 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
-
+const TixrModel = require('../models/nashville.model')
+const DuplicateEmailModel = require('../models/nahshvilleMail.model');
+const attendeeInfo = {
+  profiles: [],
+};
 const getNashvilleUser = async (req, res) => {
-  console.log(req)
-
-
   try {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
       cpk: process.env.NASHVILLE_CPK_KEY,
       end_date: req.query.end_date,
-      page_number: req.query.page,
-     
-      page_size: req.query.page_size,
+      page_number: req.query.page||1,
+      page_size: req.query.page_size||100,
       start_date: req.query.start_date,
-    
       status: "",
       t: timestamp,
     });
-    console.log(URLSearchParams.cpk)
-    const attendeeInfo = {
-      profiles: [],
-    };
-
+    const duplicateEmails = [];
     const groupResponse = await fetch(
       `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.NASHVILLE_CPK_KEY}`
     );
@@ -47,75 +42,52 @@ const getNashvilleUser = async (req, res) => {
       const orderData = orderResponse.data;
       
       orderData.map(async (details) => {
-        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
-        const algorithm = "sha256";
-        const hash = crypto
-          .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
-          .update(dataToHash)
-          .digest("hex");
-        axios
-          .get(
-            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}&hash=${hash}`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          )
-          .then((data) => {
-            console.log(data)
-            data.data.forEach(function (values) {
-              const normalizePhoneNumber = (mobNumber) => {
-                const digitsOnly = mobNumber.replace(/\D/g, "");
-              
-                if (digitsOnly.length < 10) {
-                  return null; // Invalid phone number
-                }
-              
-                const countryCode = digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
-                const areaCode = digitsOnly.substr(countryCode.length, 3);
-                const phoneDigits = digitsOnly.substr(countryCode.length + areaCode.length);
-                const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3)}`;
-                return formattedPhoneNumber;
-              };
-              
-              const processSubmission = (items, res) => {
-                mobNumber = items.answer;
-                let phoneNumber = "11" + items.answer;
-                const standardizedPhoneNumber1 = normalizePhoneNumber(phoneNumber);
-                
-                attendeeInfo.profiles.push({
-                  first_name: details.first_name,
-                  last_name: details.lastname,
-                  email: details.email,
-                  phone_number: standardizedPhoneNumber1,
-                  $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
-                  latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
-                  longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
-                  country_code: details.country_code,
-                  purchase_date: details.purchase_date,
-                  orderId: details.orderId,
-                  event_name: details.event_name,
-                });
-              
-                postUserInfo(attendeeInfo, res);
-              };
-              
-              if (values.ticket_submissions.length == 0) {
-                values.order_submissions[2].answers.forEach((items) => {
-                  processSubmission(items, res);
-                });
-              } else {
-                values.ticket_submissions[2].answers.forEach((items) => {
-                  processSubmission(items, res);
-                });
-              }
+        attendeeInfo.profiles.push({
+          first_name: details.first_name,
+          last_name: details.lastname,
+          email: details.email,
+          // phone_number: standardizedPhoneNumber1,
+          $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+          latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+          longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+          country_code: details.country_code,
+          purchase_date: details.purchase_date,
+          orderId: details.orderId,
+          event_name: details.event_name,
+        });
+
+        async function saveTixrUser() {
+          try {
+            const tixrUser = new TixrModel({
+              first_name: details.first_name,
+              last_name: details.lastname,
+              email: details.email,
+              // phone_number: standardizedPhoneNumber1,
+              $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+              latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+              longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+              country_code: details.country_code,
+              purchase_date: details.purchase_date,
+              orderId: details.orderId,
+              event_name: details.event_name,
             });
-          });
+            const existingUser = await TixrModel.findOne({ orderId: tixrUser.orderId });
+            if (!existingUser) {
+              const savedUser = await tixrUser.save();
+            } else {
+              duplicateEmails.push(tixrUser.orderId);
+              await DuplicateEmailModel.insertMany(duplicateEmails.map(orderId => ({ orderId })));
+            }
+
+          } catch (err) {
+            console.error(err);
+          }
+        }
+        saveTixrUser();
       });
-      
-    // await trackKlaviyo(orderData)
-         res.status(200).json({
+      postUserInfo(attendeeInfo, res);
+      // craterProfile(attendeeInfo)
+      res.status(200).json({
         result: orderData,
         success: true,
         message: `Total Record ${orderData.length}`
@@ -131,7 +103,6 @@ const getNashvilleUser = async (req, res) => {
   }
 };
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const subscribeEvent = async (contacts,orderData) => {
   try {
     const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/subscribe?api_key=${process.env.Nashville_Klaviyo_API_Key}`;
@@ -149,17 +120,8 @@ const subscribeEvent = async (contacts,orderData) => {
         })),
       }),
     };
-
     const response = await fetch(url, options);
     const responseBody = await response.json();
-
-    if (response.status === 429 && responseBody.error === "throttled") {
-      const retryAfter = responseBody.retry_after * 1000; // Convert to milliseconds
-      console.log(`Throttled. Retrying in ${retryAfter / 1000} seconds.`);
-      await wait(retryAfter);
-      return subscribeEvent(contacts); // Retry the request
-    }
-  
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
@@ -168,11 +130,7 @@ const subscribeEvent = async (contacts,orderData) => {
 };
 
 const postUserInfo = async (req, res) => {
-  const MAX_RETRIES = 3;
-   let retries = 0;
-  
-  while (retries < MAX_RETRIES) {
-    try {
+      try {
       const response = await fetch(
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
         {
@@ -185,20 +143,14 @@ const postUserInfo = async (req, res) => {
       );
       
       if (response.ok) {
-        const data = await response.json();
-        if(data.length){
-          console.log(data.length)
-        }else{
-          console.log('completed data')
-        }
+         await response.json();
        }
-      const subscribeResult = await subscribeEvent(req);
-      break;
+      await subscribeEvent(req);
+     
     } catch (error) {
       console.error('postApi', error );
     }
-  }
-};
+ };
 
 const trackKlaviyo = (res) => {
   res.map((events) => {
@@ -233,5 +185,26 @@ const trackKlaviyo = (res) => {
       });
   });
 };
+
+const craterProfile=(postProfile)=>{
+  const fetch = require('node-fetch');
+
+const url = 'https://a.klaviyo.com/api/profiles/';
+const options = {
+  method: 'POST',
+  headers: {
+    accept: 'application/json',
+    revision: '2023-09-15',
+    'content-type': 'application/json',
+    Authorization: 'Klaviyo-API-Key pk_24b1f27b5f87171695ae0795efa61c38a9'
+  },
+  body: JSON.stringify(postProfile)
+};
+
+fetch(url, options)
+  .then(res => res.json())
+  .then(json => console.log(json))
+  .catch(err => console.error('error:' + err));
+}
 
 module.exports = { getNashvilleUser };

@@ -1,6 +1,8 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
+const TixrModel = require('../models/cincinnati.model')
+const DuplicateEmailModel = require('../models/cincinnatiMail.model');
 
 const getCincinnatiUser = async (req, res,next) => {
   try {
@@ -17,6 +19,7 @@ const getCincinnatiUser = async (req, res,next) => {
     const attendeeInfo = {
       profiles: [],
     };
+    const duplicateEmails = [];
 
     const groupResponse = await fetch(
       `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.CINCINNATI_CPK_KEY}`
@@ -41,71 +44,53 @@ const getCincinnatiUser = async (req, res,next) => {
         }
       );
       const orderData = orderResponse.data;
+
       orderData.map(async (details) => {
-        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.CINCINNATI_CPK_KEY}&t=${timestamp}`;
-        const algorithm = "sha256";
-        const hash = crypto
-          .createHmac(algorithm, process.env.CINCINNATI_PRIVATE_KEY)
-          .update(dataToHash)
-          .digest("hex");
-        axios
-          .get(
-            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.CINCINNATI_CPK_KEY}&t=${timestamp}&hash=${hash}`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          )
-          .then((data) => {
-            data.data.forEach(function (values) {
-              const normalizePhoneNumber = (mobNumber) => {
-                const digitsOnly = mobNumber.replace(/\D/g, "");
-              
-                if (digitsOnly.length < 10) {
-                  return null; // Invalid phone number
-                }
-              
-                const countryCode = digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
-                const areaCode = digitsOnly.substr(countryCode.length, 3);
-                const phoneDigits = digitsOnly.substr(countryCode.length + areaCode.length);
-                const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3)}`;
-                return formattedPhoneNumber;
-              };
-              
-              const processSubmission = (items, res) => {
-                mobNumber = items.answer;
-                let phoneNumber = "11" + items.answer;
-                const standardizedPhoneNumber1 = normalizePhoneNumber(phoneNumber);
-                
-                attendeeInfo.profiles.push({
-                  first_name: details.first_name,
-                  last_name: details.lastname,
-                  email: details.email,
-                  phone_number: standardizedPhoneNumber1,
-                  $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
-                  latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
-                  longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
-                  country_code: details.country_code,
-                  purchase_date: details.purchase_date,
-                  orderId: details.orderId,
-                  event_name: details.event_name,
-                });
-              
-                postUserInfo(attendeeInfo, res);
-              };
-              
-              if (values.ticket_submissions.length == 0) {
-                values.order_submissions[2].answers.forEach((items) => {
-                  processSubmission(items, res);
-                });
-              } else {
-                values.ticket_submissions[2].answers.forEach((items) => {
-                  processSubmission(items, res);
-                });
-              }
+        attendeeInfo.profiles.push({
+          first_name: details.first_name,
+          last_name: details.lastname,
+          email: details.email,
+          // phone_number: standardizedPhoneNumber1,
+          $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+          latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+          longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+          country_code: details.country_code,
+          purchase_date: details.purchase_date,
+          orderId: details.orderId,
+          event_name: details.event_name,
+        });
+
+        async function saveTixrUser() {
+          try {
+            const tixrUser = new TixrModel({
+              first_name: details.first_name,
+              last_name: details.lastname,
+              email: details.email,
+              // phone_number: standardizedPhoneNumber1,
+              $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+              latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+              longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+              country_code: details.country_code,
+              purchase_date: details.purchase_date,
+              orderId: details.orderId,
+              event_name: details.event_name,
             });
-          });
+            const existingUser = await TixrModel.findOne({ email: tixrUser.email });
+            if (!existingUser) {
+              // Save the document if the email is not a duplicate
+              const savedUser = await tixrUser.save();
+              // console.log('Document saved:', savedUser);
+            } else {
+              console.log('Duplicate email found:', tixrUser.email);
+              duplicateEmails.push(tixrUser.email);
+              await DuplicateEmailModel.insertMany(duplicateEmails.map(email => ({ email })));
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        }
+        saveTixrUser();
+        postUserInfo(attendeeInfo, res);
       });
       trackKlaviyo(orderData)
       res.status(200).json({
@@ -181,7 +166,7 @@ const postUserInfo = async (req, res) => {
       
       if (response.ok) {
         const data = await response.json();
-        console.log(data.length)
+        // console.log(data.length)
         // Process data if needed
       }
 
@@ -190,19 +175,19 @@ const postUserInfo = async (req, res) => {
     } catch (error) {
       console.error('postApi', error );
 
-      if (error instanceof FetchError && error.code === '429') {
-        // Extract the "Retry-After" header value in seconds
-        const retryAfter = parseInt(error.headers.get('Retry-After'), 10) || INITIAL_BACKOFF_MS / 1000;
+      // if (error instanceof FetchError && error.code === '429') {
+      //   // Extract the "Retry-After" header value in seconds
+      //   const retryAfter = parseInt(error.headers.get('Retry-After'), 10) || INITIAL_BACKOFF_MS / 1000;
 
-        // Wait for the specified duration before retrying
-        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+      //   // Wait for the specified duration before retrying
+      //   await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
 
-        // Increase the backoff duration for subsequent retries
-        retries++;
-      } else {
-        // Handle other errors if needed
-        break;
-      }
+      //   // Increase the backoff duration for subsequent retries
+      //   retries++;
+      // } else {
+      //   // Handle other errors if needed
+      //   break;
+      // }
     }
   }
 };

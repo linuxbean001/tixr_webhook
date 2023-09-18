@@ -2,15 +2,19 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
 const https = require('https');
+const TixrModel = require('../models/columbus.model')
+const DuplicateEmailModel = require('../models/dupColumbus.model');
+
 
 const getColumbusUser = async (req, res) => {
+
   try {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
       cpk: process.env.COLUMBUS_CPK_KEY,
       end_date: req.query.end_date,
       page_number: req.query.page,
-      page_size: req.query.page_size|| 5,
+      page_size: req.query.page_size || 5,
       start_date: req.query.start_date,
       status: "",
       t: timestamp,
@@ -18,18 +22,16 @@ const getColumbusUser = async (req, res) => {
     const attendeeInfo = {
       profiles: [],
     };
+    const duplicateEmails = [];
 
     const groupResponse = await fetch(
       `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.COLUMBUS_CPK_KEY}`
     );
     const groupData = await groupResponse.json();
-    const usersToSendToKlaviyo = [];
-
     const valuePromises = groupData.map(async (element) => {
       // return concurrentLimit(async () => {
-      const dataToHash = `/v1/groups/${
-        element.id
-      }/orders?${queryParams.toString()}`;
+      const dataToHash = `/v1/groups/${element.id
+        }/orders?${queryParams.toString()}`;
       const algorithm = "sha256";
       const hash = crypto
         .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
@@ -43,92 +45,73 @@ const getColumbusUser = async (req, res) => {
           },
         }
       );
+      // console.log('response', orderResponse)
       const orderData = orderResponse.data;
+
       orderData.map(async (details) => {
-        // Check if the user already exists in Klaviyo (you need to implement this logic)
-        // const userExistsInKlaviyo = await checkIfUserExistsInKlaviyo(details.email);
-        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}`;
-        const algorithm = "sha256";
-        const hash = crypto
-          .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
-          .update(dataToHash)
-          .digest("hex");
-        axios
-          .get(
-            `${process.env.TIXR_URL}/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          )
-          .then((data) => {
-            data.data.forEach(function (values) {
-              const normalizePhoneNumber = (mobNumber) => {
-                const digitsOnly = mobNumber.replace(/\D/g, "");
-              
-                if (digitsOnly.length < 10) {
-                  return null; // Invalid phone number
-                }
-              
-                const countryCode = digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
-                const areaCode = digitsOnly.substr(countryCode.length, 3);
-                const phoneDigits = digitsOnly.substr(countryCode.length + areaCode.length);
-                const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3)}`;
-                return formattedPhoneNumber;
-              };
-              
-              const processSubmission = (items, res) => {
-                mobNumber = items.answer;
-                let phoneNumber = "11" + items.answer;
-                const standardizedPhoneNumber1 = normalizePhoneNumber(phoneNumber);
-                // if (!userExistsInKlaviyo) {
-                attendeeInfo.profiles.push({
-                  first_name: details.first_name,
-                  last_name: details.lastname,
-                  email: details.email,
-                  phone_number: standardizedPhoneNumber1,
-                  $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
-                  latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
-                  longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
-                  country_code: details.country_code,
-                  purchase_date: details.purchase_date,
-                  orderId: details.orderId,
-                  event_name: details.event_name,
-                });
-              // }
-              
-                postUserInfo(attendeeInfo, res);
-              };
-              
-              if (values.ticket_submissions.length == 0) {
-                values.order_submissions[2].answers.forEach((items) => {
-                  processSubmission(items, res);
-                });
-              } else {
-                values.ticket_submissions[2].answers.forEach((items) => {
-                  processSubmission(items, res);
-                });
-              }
+        attendeeInfo.profiles.push({
+          first_name: details.first_name,
+          last_name: details.lastname,
+          email: details.email,
+          // phone_number: standardizedPhoneNumber1,
+          $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+          latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+          longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+          country_code: details.country_code,
+          purchase_date: details.purchase_date,
+          orderId: details.orderId,
+          event_name: details.event_name,
+        });
+
+        async function saveTixrUser() {
+          try {
+            const tixrUser = new TixrModel({
+              first_name: details.first_name,
+              last_name: details.lastname,
+              email: details.email,
+              // phone_number: standardizedPhoneNumber1,
+              $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
+              latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
+              longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
+              country_code: details.country_code,
+              purchase_date: details.purchase_date,
+              orderId: details.orderId,
+              event_name: details.event_name,
             });
-          });
+            const existingUser = await TixrModel.findOne({ orderId: tixrUser.orderId });
+            if (!existingUser) {
+              const savedUser = await tixrUser.save();
+            } else {
+              console.log('Duplicate email found:', tixrUser.orderId);
+              duplicateEmails.push(tixrUser.orderId);
+              await DuplicateEmailModel.insertMany(duplicateEmails.map(orderId => ({ orderId })));
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        }
+        
+        // Call the async function
+        saveTixrUser();
+
+        postUserInfo(attendeeInfo, res);
 
       });
-      await Promise.all(valuePromises);
-      const klaviyoResponse = await sendUsersToKlaviyo(usersToSendToKlaviyo);
+       console.log('duplicateEmailsArray',duplicateEmails)
       res.status(200).json({
-        result: klaviyoResponse,
+        result: orderData,
         success: true,
         message: `Total Record ${orderData.length}`
       });
-    // });
     });
-    
-    
+    await Promise.all(valuePromises);
+
   } catch (err) {
+    console.error(err);
     res.status(500).json({
-     error: err.message || JSON.stringify(err), success: false })
-      }
+      error: err.message || JSON.stringify(err), success: false
+    })
+  }
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -157,10 +140,9 @@ const subscribeEvent = async (contacts) => {
       const retryAfter = responseBody.retry_after * 1000; // Convert to milliseconds
       console.log(`Throttled. Retrying in ${retryAfter / 1000} seconds.`);
       await wait(retryAfter);
-     
       return subscribeEvent(contacts); // Retry the request
     }
-  
+
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
@@ -168,16 +150,10 @@ const subscribeEvent = async (contacts) => {
   }
 };
 
-
-
-
 const postUserInfo = async (req, res) => {
-  // console.log(req)
   const MAX_RETRIES = 3;
-    const INITIAL_BACKOFF_MS = 1000; // 1 second
-
   let retries = 0;
-  
+
   while (retries < MAX_RETRIES) {
     try {
       const response = await fetch(
@@ -190,60 +166,21 @@ const postUserInfo = async (req, res) => {
           }
         }
       );
-           
-      if (response.ok) {
-        const data = await response.json();
-        data.length? console.log(data.length) : console.log(" completed data")
-      }
 
-      const subscribeResult = await subscribeEvent(req);
+      if (response.ok) {
+        await response.json();
+      }
+      await subscribeEvent(req);
       break;
     } catch (error) {
-      console.error('postApi', error );
+      console.error('postApi', error);
     }
   }
-  // trackKlaviyo(req)
 };
 
-
-
-// const trackKlaviyo = (res) => {
-//     res.profiles.map((events) => {
-//     let data = JSON.stringify({
-//       token: "Ri9wyv",
-//       event: events.event_name,
-//       customer_properties: {
-//         email: events.email,
-//         first_name: events.first_name,
-//         last_name: events.lastname,
-//         phone_number: events.phone_number,
-//       }
-//     });
-
-//     let config = {
-//       method: 'post',
-//       maxBodyLength: Infinity,
-//       url: 'https://a.klaviyo.com/api/track',
-//       headers: {
-//         'Content-Type': 'application/json'
-//       },
-//       data: data
-//     };
-
-//     axios.request(config)
-//       .then((response) => {
-//         console.log(JSON.stringify(response.data));
-//       })
-//       .catch((error) => {
-//         console.log(error);
-//       });
-//   });
-// };
 const agent = new https.Agent({
   maxSockets: 10 // You can adjust the maximum number of sockets as needed
 });
-
-
 
 const trackKlaviyo = (res) => {
   res.profiles.map((events) => {
@@ -289,7 +226,5 @@ const trackKlaviyo = (res) => {
     req.end();
   });
 };
-
-
 
 module.exports = { getColumbusUser };
