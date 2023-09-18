@@ -2,9 +2,12 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
 const https = require('https');
+const moment = require('moment');
 const TixrModel = require('../models/columbus.model')
 const DuplicateEmailModel = require('../models/dupColumbus.model');
-
+const attendeeInfo = {
+  profiles: [],
+};
 
 const getColumbusUser = async (req, res) => {
 
@@ -12,16 +15,14 @@ const getColumbusUser = async (req, res) => {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
       cpk: process.env.COLUMBUS_CPK_KEY,
-      end_date: req.query.end_date,
-      page_number: req.query.page,
-      page_size: req.query.page_size || 5,
-      start_date: req.query.start_date,
+      end_date: req.query.end_date||moment().add(1,'days').format('YYYY-MM-D'),
+      page_number: req.query.page||1,
+      page_size: req.query.page_size||100,
+      start_date: req.query.start_date||moment().format('YYYY-MM-D'),
       status: "",
       t: timestamp,
     });
-    const attendeeInfo = {
-      profiles: [],
-    };
+    
     const duplicateEmails = [];
 
     const groupResponse = await fetch(

@@ -1,24 +1,25 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
+const moment = require('moment');
 const TixrModel = require('../models/cincinnati.model')
 const DuplicateEmailModel = require('../models/cincinnatiMail.model');
-
+const attendeeInfo = {
+  profiles: [],
+};
 const getCincinnatiUser = async (req, res,next) => {
   try {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
       cpk: process.env.CINCINNATI_CPK_KEY,
-      end_date: req.query.end_date,
-      page_number: req.query.page,
-      page_size: req.query.page_size,
-      start_date: req.query.start_date,
+      end_date: req.query.end_date||moment().add(1,'days').format('YYYY-MM-D'),
+      page_number: req.query.page||1,
+      page_size: req.query.page_size||100,
+      start_date: req.query.start_date||moment().format('YYYY-MM-D'),
       status: "",
       t: timestamp,
     });
-    const attendeeInfo = {
-      profiles: [],
-    };
+    
     const duplicateEmails = [];
 
     const groupResponse = await fetch(
@@ -77,9 +78,7 @@ const getCincinnatiUser = async (req, res,next) => {
             });
             const existingUser = await TixrModel.findOne({ email: tixrUser.email });
             if (!existingUser) {
-              // Save the document if the email is not a duplicate
               const savedUser = await tixrUser.save();
-              // console.log('Document saved:', savedUser);
             } else {
               console.log('Duplicate email found:', tixrUser.email);
               duplicateEmails.push(tixrUser.email);
@@ -103,12 +102,9 @@ const getCincinnatiUser = async (req, res,next) => {
   } catch (err) {
     return next(err)
   }
-    // res.status(500).json({
-    //  error: err.message || JSON.stringify(err), success: false })
-    //   }
 };
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const subscribeEvent = async (contacts) => {
   try {
     const url = `https://a.klaviyo.com/api/v2/list/XSNnkJ/subscribe?api_key=pk_019d39a10598240f0350fc93c6e07acbcc`;
@@ -129,15 +125,6 @@ const subscribeEvent = async (contacts) => {
 
     const response = await fetch(url, options);
     const responseBody = await response.json();
-
-    if (response.status === 429 && responseBody.error === "throttled") {
-      const retryAfter = responseBody.retry_after * 1000; // Convert to milliseconds
-      console.log(`Throttled. Retrying in ${retryAfter / 1000} seconds.`);
-      await wait(retryAfter);
-     
-      return subscribeEvent(contacts); // Retry the request
-    }
-  
     return responseBody;
   } catch (error) {
     console.error("Error:", error);
@@ -146,12 +133,8 @@ const subscribeEvent = async (contacts) => {
 };
 
 const postUserInfo = async (req, res) => {
-  const MAX_RETRIES = 3;
-  const INITIAL_BACKOFF_MS = 1000; // 1 second
-
-  let retries = 0;
   
-  while (retries < MAX_RETRIES) {
+  
     try {
       const response = await fetch(
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
@@ -163,34 +146,14 @@ const postUserInfo = async (req, res) => {
           }
         }
       );
-      
       if (response.ok) {
         const data = await response.json();
-        // console.log(data.length)
-        // Process data if needed
       }
-
       const subscribeResult = await subscribeEvent(req);
-      break;
     } catch (error) {
       console.error('postApi', error );
-
-      // if (error instanceof FetchError && error.code === '429') {
-      //   // Extract the "Retry-After" header value in seconds
-      //   const retryAfter = parseInt(error.headers.get('Retry-After'), 10) || INITIAL_BACKOFF_MS / 1000;
-
-      //   // Wait for the specified duration before retrying
-      //   await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-
-      //   // Increase the backoff duration for subsequent retries
-      //   retries++;
-      // } else {
-      //   // Handle other errors if needed
-      //   break;
-      // }
     }
-  }
-};
+ };
 
 const trackKlaviyo = (res) => {
   res.map((events) => {

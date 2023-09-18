@@ -1,6 +1,7 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
+const moment = require('moment');
 const TixrModel = require('../models/nashville.model')
 const DuplicateEmailModel = require('../models/nahshvilleMail.model');
 const attendeeInfo = {
@@ -11,10 +12,10 @@ const getNashvilleUser = async (req, res) => {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
       cpk: process.env.NASHVILLE_CPK_KEY,
-      end_date: req.query.end_date,
+      end_date: req.query.end_date||moment().add(1,'days').format('YYYY-MM-D'),
       page_number: req.query.page||1,
       page_size: req.query.page_size||100,
-      start_date: req.query.start_date,
+      start_date: req.query.start_date||moment().format('YYYY-MM-D'),
       status: "",
       t: timestamp,
     });
@@ -39,6 +40,7 @@ const getNashvilleUser = async (req, res) => {
           },
         }
       );
+     
       const orderData = orderResponse.data;
       
       orderData.map(async (details) => {
@@ -83,8 +85,11 @@ const getNashvilleUser = async (req, res) => {
             console.error(err);
           }
         }
-        saveTixrUser();
+        // saveTixrUser();
       });
+      const date = new Date();
+      console.log(moment().add(1,'days').format('YYYY-MM-D'));
+    //  console.log(date)
       postUserInfo(attendeeInfo, res);
       // craterProfile(attendeeInfo)
       res.status(200).json({
