@@ -93,7 +93,7 @@ const getColumbusUser = async (req, res) => {
         }
         
         // Call the async function
-        saveTixrUser();
+        // saveTixrUser();
 
         postUserInfo(attendeeInfo, res);
 

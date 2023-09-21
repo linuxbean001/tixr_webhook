@@ -16,14 +16,14 @@ const TixrModel = require('./models/columbus.model')
   })
   .then(() => {
     console.log('Database connected');
-    app.listen(port, () => {
-      console.log(`Server run successfully on port ${port}`);
-    });
+    
   })
   .catch((err) => {
     console.error(`Unable to connect to MongoDB: ${err}`);
   });
-
+  app.listen(port, () => {
+    console.log(`Server run successfully on port ${port}`);
+  });
  
  app.use("/", tixrRouter);
 app.use(errorHandler)

@@ -24,6 +24,7 @@
     "express-unless": "^1.0.0",
     "moment": "^2.29.4",
     "mongoose": "^7.5.1",
+    "node-cron": "^3.0.2",
     "node-fetch": "^2.6.9",
     "request": "^2.88.2"
   },

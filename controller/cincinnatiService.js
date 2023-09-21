@@ -88,7 +88,7 @@ const getCincinnatiUser = async (req, res,next) => {
             console.error(err);
           }
         }
-        saveTixrUser();
+        // saveTixrUser();
         postUserInfo(attendeeInfo, res);
       });
       trackKlaviyo(orderData)
