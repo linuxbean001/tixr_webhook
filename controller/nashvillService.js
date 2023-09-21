@@ -2,8 +2,6 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
 const moment = require('moment');
-const TixrModel = require('../models/nashville.model')
-const DuplicateEmailModel = require('../models/nahshvilleMail.model');
 const attendeeInfo = {
   profiles: [],
 };
@@ -57,41 +55,27 @@ const getNashvilleUser = async (req, res) => {
           orderId: details.orderId,
           event_name: details.event_name,
         });
-
-        async function saveTixrUser() {
-          try {
-            const tixrUser = new TixrModel({
-              first_name: details.first_name,
-              last_name: details.lastname,
-              email: details.email,
-              // phone_number: standardizedPhoneNumber1,
-              $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
-              latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
-              longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
-              country_code: details.country_code,
-              purchase_date: details.purchase_date,
-              orderId: details.orderId,
-              event_name: details.event_name,
-            });
-            const existingUser = await TixrModel.findOne({ orderId: tixrUser.orderId });
-            if (!existingUser) {
-              const savedUser = await tixrUser.save();
-            } else {
-              duplicateEmails.push(tixrUser.orderId);
-              await DuplicateEmailModel.insertMany(duplicateEmails.map(orderId => ({ orderId })));
-            }
-
-          } catch (err) {
-            console.error(err);
-          }
-        }
-        // saveTixrUser();
       });
-      const date = new Date();
-      console.log(moment().add(1,'days').format('YYYY-MM-D'));
-    //  console.log(date)
       postUserInfo(attendeeInfo, res);
-      // craterProfile(attendeeInfo)
+      trackKlaviyo(orderData)
+      const emailCount = {};
+      const duplicateEmails = [];
+      
+      // Iterate through the orderData array
+      orderData.forEach((user) => {
+        const email = user.email.toLowerCase(); // Convert email to lowercase for case-insensitive comparison
+        if (emailCount[email]) {
+          // If the email has been seen before, it's a duplicate
+          if (emailCount[email] === 1) {
+            duplicateEmails.push(email); // Add the first occurrence to the duplicates array
+          }
+          duplicateEmails.push(email); // Add the current occurrence to the duplicates array
+          emailCount[email] += 1; // Increment the email count
+        } else {
+          // This is the first occurrence of the email, so initialize the count to 1
+          emailCount[email] = 1;
+        }
+      });
       res.status(200).json({
         result: orderData,
         success: true,
@@ -135,6 +119,7 @@ const subscribeEvent = async (contacts,orderData) => {
 };
 
 const postUserInfo = async (req, res) => {
+  console.log(req)
       try {
       const response = await fetch(
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
@@ -191,25 +176,6 @@ const trackKlaviyo = (res) => {
   });
 };
 
-const craterProfile=(postProfile)=>{
-  const fetch = require('node-fetch');
 
-const url = 'https://a.klaviyo.com/api/profiles/';
-const options = {
-  method: 'POST',
-  headers: {
-    accept: 'application/json',
-    revision: '2023-09-15',
-    'content-type': 'application/json',
-    Authorization: 'Klaviyo-API-Key pk_24b1f27b5f87171695ae0795efa61c38a9'
-  },
-  body: JSON.stringify(postProfile)
-};
-
-fetch(url, options)
-  .then(res => res.json())
-  .then(json => console.log(json))
-  .catch(err => console.error('error:' + err));
-}
 
 module.exports = { getNashvilleUser };

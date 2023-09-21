@@ -2,8 +2,6 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const axios = require("axios");
 const moment = require('moment');
-const TixrModel = require('../models/cincinnati.model')
-const DuplicateEmailModel = require('../models/cincinnatiMail.model');
 const attendeeInfo = {
   profiles: [],
 };
@@ -19,8 +17,6 @@ const getCincinnatiUser = async (req, res,next) => {
       status: "",
       t: timestamp,
     });
-    
-    const duplicateEmails = [];
 
     const groupResponse = await fetch(
       `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.CINCINNATI_CPK_KEY}`
@@ -60,38 +56,29 @@ const getCincinnatiUser = async (req, res,next) => {
           orderId: details.orderId,
           event_name: details.event_name,
         });
-
-        async function saveTixrUser() {
-          try {
-            const tixrUser = new TixrModel({
-              first_name: details.first_name,
-              last_name: details.lastname,
-              email: details.email,
-              // phone_number: standardizedPhoneNumber1,
-              $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
-              latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
-              longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
-              country_code: details.country_code,
-              purchase_date: details.purchase_date,
-              orderId: details.orderId,
-              event_name: details.event_name,
-            });
-            const existingUser = await TixrModel.findOne({ email: tixrUser.email });
-            if (!existingUser) {
-              const savedUser = await tixrUser.save();
-            } else {
-              console.log('Duplicate email found:', tixrUser.email);
-              duplicateEmails.push(tixrUser.email);
-              await DuplicateEmailModel.insertMany(duplicateEmails.map(email => ({ email })));
-            }
-          } catch (err) {
-            console.error(err);
-          }
-        }
-        // saveTixrUser();
-        postUserInfo(attendeeInfo, res);
       });
+      postUserInfo(attendeeInfo, res);
       trackKlaviyo(orderData)
+      const emailCount = {};
+      const duplicateEmails = [];
+      
+      // Iterate through the orderData array
+      orderData.forEach((user) => {
+        const email = user.email.toLowerCase(); // Convert email to lowercase for case-insensitive comparison
+        if (emailCount[email]) {
+          // If the email has been seen before, it's a duplicate
+          if (emailCount[email] === 1) {
+            duplicateEmails.push(email); // Add the first occurrence to the duplicates array
+          }
+          duplicateEmails.push(email); // Add the current occurrence to the duplicates array
+          emailCount[email] += 1; // Increment the email count
+        } else {
+          // This is the first occurrence of the email, so initialize the count to 1
+          emailCount[email] = 1;
+        }
+      });
+      
+      console.log(duplicateEmails);
       res.status(200).json({
         result: orderData,
         success: true,
@@ -133,8 +120,6 @@ const subscribeEvent = async (contacts) => {
 };
 
 const postUserInfo = async (req, res) => {
-  
-  
     try {
       const response = await fetch(
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
@@ -187,6 +172,5 @@ const trackKlaviyo = (res) => {
       });
   });
 };
-
 
 module.exports = { getCincinnatiUser };
