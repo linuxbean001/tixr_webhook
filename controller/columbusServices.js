@@ -8,7 +8,6 @@ const attendeeInfo = {
 };
 
 const getColumbusUser = async (req, res) => {
-
   try {
     const timestamp = Math.floor(Date.now());
     const queryParams = new URLSearchParams({
@@ -90,7 +89,6 @@ const getColumbusUser = async (req, res) => {
       });
     });
     await Promise.all(valuePromises);
-
   } catch (err) {
     console.error(err);
     res.status(500).json({
@@ -99,7 +97,6 @@ const getColumbusUser = async (req, res) => {
   }
 };
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const subscribeEvent = async (contacts) => {
   try {
     const url = `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/subscribe?api_key=${process.env.Columbus_Klaviyo_API_Key}`;
@@ -150,7 +147,7 @@ const postUserInfo = async (req, res) => {
   }
 
 const trackKlaviyo = (res) => {
-  res.profiles.map((events) => {
+  res.map((events) => {
     let data = JSON.stringify({
       token: "Ri9wyv",
       event: events.event_name,
@@ -170,25 +167,20 @@ const trackKlaviyo = (res) => {
         'Content-Type': 'application/json',
         'Content-Length': data.length
       },
-      agent: agent // Use the connection pooling agent
     };
 
     let req = https.request(options, (response) => {
       let responseData = '';
-
       response.on('data', (chunk) => {
         responseData += chunk;
       });
-
       response.on('end', () => {
-        console.log(responseData);
+        console.log('tracked data',responseData);
       });
     });
-
     req.on('error', (error) => {
       console.log(error);
     });
-
     req.write(data);
     req.end();
   });

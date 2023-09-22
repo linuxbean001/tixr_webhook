@@ -119,8 +119,7 @@ const subscribeEvent = async (contacts,orderData) => {
 };
 
 const postUserInfo = async (req, res) => {
-  console.log(req)
-      try {
+       try {
       const response = await fetch(
         `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
         {
@@ -175,7 +174,5 @@ const trackKlaviyo = (res) => {
       });
   });
 };
-
-
 
 module.exports = { getNashvilleUser };
