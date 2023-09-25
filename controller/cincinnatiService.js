@@ -41,21 +41,56 @@ const getCincinnatiUser = async (req, res,next) => {
         }
       );
       const orderData = orderResponse.data;
-
       orderData.map(async (details) => {
-        attendeeInfo.profiles.push({
-          first_name: details.first_name,
-          last_name: details.lastname,
-          email: details.email,
-          // phone_number: standardizedPhoneNumber1,
-          $city: details && details.geo_info && details.geo_info.city ? details.geo_info.city : "",
-          latitude: details && details.geo_info && details.geo_info.latitude ? details.geo_info.latitude : "",
-          longitude: details && details.geo_info && details.geo_info.longitude ? details.geo_info.longitude : "",
-          country_code: details.country_code,
-          purchase_date: details.purchase_date,
-          orderId: details.orderId,
-          event_name: details.event_name,
-        });
+        const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}`;
+        const algorithm = "sha256";
+        const hash = crypto
+          .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
+          .update(dataToHash)
+          .digest("hex");
+        axios
+          .get(
+            `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+            {
+              headers: {
+                Accept: "application/json",
+              },
+            }
+          )
+          .then((data) => {
+            data.data.forEach(function (values) {
+              values.ticket_submissions.length == 0
+              const phoneNumber =  values.order_submissions[2].answers || values.ticket_submissions[2].answers;
+              phoneNumber.map((items) => {
+                    mobNumber = items.answer;
+                    // let phoneNumber = "11" + items.answer;
+                    attendeeInfo.profiles.push({
+                      first_name: details.first_name,
+                      last_name: details.lastname,
+                      email: details.email,
+                      phone_number: mobNumber,
+                      $city:
+                        details && details.geo_info && details.geo_info.city
+                          ? details.geo_info.city
+                          : "",
+                      latitude:
+                        details && details.geo_info && details.geo_info.latitude
+                          ? details.geo_info.latitude
+                          : "",
+                      longitude:
+                        details &&
+                        details.geo_info &&
+                        details.geo_info.longitude
+                          ? details.geo_info.longitude
+                          : "",
+                      country_code: details.country_code,
+                      purchase_date: details.purchase_date,
+                      orderId: details.orderId,
+                      event_name: details.event_name,
+                    });
+                  });
+            });
+          });
       });
       postUserInfo(attendeeInfo, res);
       trackKlaviyo(orderData)
