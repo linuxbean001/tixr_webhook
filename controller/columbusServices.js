@@ -90,7 +90,7 @@ const getColumbusUser = async (req, res) => {
                   first_name: details.first_name,
                   last_name: details.lastname,
                   email: details.email,
-                  phone_number: standardizedPhoneNumber,
+                  phone_number: standardizedPhoneNumber||"",
                   $city: details?.geo_info?.city || "",
                   latitude: details?.geo_info?.latitude || "",
                   longitude: details?.geo_info?.longitude || "",
