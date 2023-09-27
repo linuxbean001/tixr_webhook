@@ -59,134 +59,57 @@ const getNashvilleUser = async (req, res) => {
           )
           .then((data) => {
             data.data.forEach(function (values) {
-              values.ticket_submissions.length == 0
-                ? values.order_submissions[2].answers.map((items) => {
-                  mobNumber = items.answer;
-                  const normalizePhoneNumber = (mobNumber) => {
-                    const digitsOnly = mobNumber.replace(/\D/g, "");
-                    if (digitsOnly.length < 10) {
-                      return null; // Invalid phone number
-                    }
-
-                    const countryCode =
-                      digitsOnly.length === 11
-                        ? "+" + digitsOnly.charAt(0)
-                        : "+1";
-
-                    const areaCode = digitsOnly.substr(countryCode.length, 3);
-                    const phoneDigits = digitsOnly.substr(
-                      countryCode.length + areaCode.length
-                    );
-
-                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-                      0,
-                      3
-                    )}-${phoneDigits.slice(3)}`;
-
-                    return formattedPhoneNumber;
-                  };
-                  let phoneNumber = "11" + items.answer;
-                  const standardizedPhoneNumber1 =
-                    normalizePhoneNumber(phoneNumber);
-                  attendeeInfo.profiles.push({
-                    first_name: details.first_name,
-                    last_name: details.lastname,
-                    email: details.email,
-                    phone_number: standardizedPhoneNumber1,
-                    $city:
-                      details && details.geo_info && details.geo_info.city
-                        ? details.geo_info.city
-                        : "",
-                    latitude:
-                      details && details.geo_info && details.geo_info.latitude
-                        ? details.geo_info.latitude
-                        : "",
-                    longitude:
-                      details &&
-                        details.geo_info &&
-                        details.geo_info.longitude
-                        ? details.geo_info.longitude
-                        : "",
-                    country_code: details.country_code,
-                    purchase_date: details.purchase_date,
-                    orderId: details.orderId,
-                    event_name: details.event_name,
-                  });
-                  // postUserInfo(attendeeInfo, orderData);
-                })
-                : values.ticket_submissions[2].answers.map((items) => {
-                  mobNumber = items.answer;
-                  const normalizePhoneNumber = (mobNumber) => {
-                    const digitsOnly = mobNumber.replace(/\D/g, "");
-                    if (digitsOnly.length < 10) {
-                      return null; // Invalid phone number
-                    }
-                    const countryCode =
-                      digitsOnly.length === 11
-                        ? "+" + digitsOnly.charAt(0)
-                        : "+1";
-                    const areaCode = digitsOnly.substr(countryCode.length, 3);
-                    const phoneDigits = digitsOnly.substr(
-                      countryCode.length + areaCode.length
-                    );
-                    const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-                      0,
-                      3
-                    )}-${phoneDigits.slice(3)}`;
-                    return formattedPhoneNumber;
-                  };
-                  let phoneNumber = "11" + items.answer;
-                  const standardizedPhoneNumber1 =
-                    normalizePhoneNumber(phoneNumber);
-                  attendeeInfo.profiles.push({
-                    first_name: details.first_name,
-                    last_name: details.lastname,
-                    email: details.email,
-                    phone_number: standardizedPhoneNumber1,
-                    $city:
-                      details && details.geo_info && details.geo_info.city
-                        ? details.geo_info.city
-                        : "",
-                    latitude:
-                      details && details.geo_info && details.geo_info.latitude
-                        ? details.geo_info.latitude
-                        : "",
-                    longitude:
-                      details &&
-                        details.geo_info &&
-                        details.geo_info.longitude
-                        ? details.geo_info.longitude
-                        : "",
-                    country_code: details.country_code,
-                    purchase_date: details.purchase_date,
-                    orderId: details.orderId,
-                    event_name: details.event_name,
-                  });
-                  // postUserInfo(attendeeInfo, orderData);
+              const processItems = (items) => {
+                const normalizePhoneNumber = (mobNumber) => {
+                  const digitsOnly = mobNumber.replace(/\D/g, "");
+                  if (digitsOnly.length < 10) {
+                    return null; // Invalid phone number
+                  }
+            
+                  const countryCode =
+                    digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
+            
+                  const areaCode = digitsOnly.substr(countryCode.length, 3);
+                  const phoneDigits = digitsOnly.substr(
+                    countryCode.length + areaCode.length
+                  );
+            
+                  const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
+                    0,
+                    3
+                  )}-${phoneDigits.slice(3)}`;
+            
+                  return formattedPhoneNumber;
+                };
+            
+                let phoneNumber = "11" + items.answer;
+                const standardizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+            
+                attendeeInfo.profiles.push({
+                  first_name: details.first_name,
+                  last_name: details.lastname,
+                  email: details.email,
+                  phone_number: standardizedPhoneNumber,
+                  $city: details?.geo_info?.city || "",
+                  latitude: details?.geo_info?.latitude || "",
+                  longitude: details?.geo_info?.longitude || "",
+                  country_code: details.country_code,
+                  purchase_date: details.purchase_date,
+                  orderId: details.orderId,
+                  event_name: details.event_name,
                 });
+                postUserInfo(attendeeInfo, res);
+              
+              };
+              if (values.ticket_submissions.length === 0) {
+                values.order_submissions[2].answers.forEach(processItems);
+              } else {
+                values.ticket_submissions[2].answers.forEach(processItems);
+              }
             });
           });
       });
-      postUserInfo(attendeeInfo, res);
       trackKlaviyo(orderData)
-      const emailCount = {};
-      const duplicateEmails = [];
-      
-      // Iterate through the orderData array
-      orderData.forEach((user) => {
-        const email = user.email.toLowerCase(); // Convert email to lowercase for case-insensitive comparison
-        if (emailCount[email]) {
-          // If the email has been seen before, it's a duplicate
-          if (emailCount[email] === 1) {
-            duplicateEmails.push(email); // Add the first occurrence to the duplicates array
-          }
-          duplicateEmails.push(email); // Add the current occurrence to the duplicates array
-          emailCount[email] += 1; // Increment the email count
-        } else {
-          // This is the first occurrence of the email, so initialize the count to 1
-          emailCount[email] = 1;
-        }
-      });
       res.status(200).json({
         result: orderData,
         success: true,
