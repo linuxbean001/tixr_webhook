@@ -111,7 +111,6 @@ const getMobileNumber = async (orderData) => {
     } catch (error) {
       console.error("Error:", error);
     }
-    console.log(details)
     getOrderData(standardizedPhoneNumber, details)
   }
   
@@ -134,7 +133,7 @@ const getOrderData = async (orderData, details) => {
       event_name: details.event_name,
     });
     postUserInfo(attendeeInfo,);
-    trackKlaviyo(orderData)
+    trackKlaviyo(attendeeInfo)
   } catch (err) {
     console.log(err)
   }
@@ -167,7 +166,6 @@ const subscribeEvent = async (contacts) => {
 };
 
 const postUserInfo = async (req, res) => {
-  console.log(req)
   try {
     const response = await fetch(
       `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
@@ -191,18 +189,19 @@ const postUserInfo = async (req, res) => {
 };
 
 const trackKlaviyo = (res) => {
-console.log(res)
-    let data = JSON.stringify({
-      token: "Suc7vS",
-      event: res.event_name,
-      customer_properties: {
-        email: res.email,
-        first_name: res.first_name,
-        last_name: res.lastname,
-        phone_number: res.phone_number,
-      }
-    });
-
+  let data 
+    res.profiles.forEach((user)=>{
+      data = JSON.stringify({
+        token: "Suc7vS",
+        event: user.event_name,
+        customer_properties: {
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.lastname,
+          phone_number: user.phone_number,
+        }
+      })
+    })
     let config = {
       method: 'post',
       maxBodyLength: Infinity,

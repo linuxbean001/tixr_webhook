@@ -9,7 +9,7 @@ const attendeeInfo = {
 const getColumbusUser = async (req, res) => {
   const timestamp = Math.floor(Date.now());
   const queryParams = new URLSearchParams({
-    cpk: process.env.CINCINNATI_CPK_KEY,
+    cpk: process.env.COLUMBUS_CPK_KEY,
     end_date: req.query.end_date || moment().add(1, 'days').format('YYYY-MM-D'),
     page_number: req.query.page || 1,
     page_size: req.query.page_size || 100,
@@ -67,7 +67,7 @@ const getMobileNumber = async (orderData) => {
 
     try {
       const response = await axios.get(
-        `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.Cincinnati_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+        `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
         {
           headers: {
             Accept: "application/json",
@@ -111,8 +111,7 @@ const getMobileNumber = async (orderData) => {
     } catch (error) {
       console.error("Error:", error);
     }
-    console.log(details)
-    getOrderData(standardizedPhoneNumber, details)
+       getOrderData(standardizedPhoneNumber, details)
   }
   
 };
@@ -133,8 +132,8 @@ const getOrderData = async (orderData, details) => {
       orderId: details.orderId,
       event_name: details.event_name,
     });
-    postUserInfo(attendeeInfo,);
-    trackKlaviyo(orderData)
+    postUserInfo(attendeeInfo);
+    trackKlaviyo(attendeeInfo)
   } catch (err) {
     console.log(err)
   }
@@ -167,7 +166,6 @@ const subscribeEvent = async (contacts) => {
 };
 
 const postUserInfo = async (req, res) => {
-  console.log(req)
   try {
     const response = await fetch(
       `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
@@ -191,17 +189,19 @@ const postUserInfo = async (req, res) => {
 };
 
 const trackKlaviyo = (res) => {
-    let data = JSON.stringify({
-      token: "Ri9wyv",
-      event: res.event_name,
-      customer_properties: {
-        email: res.email,
-        first_name: res.first_name,
-        last_name: res.lastname,
-        phone_number: res.phone_number,
-      }
-    });
-
+  let data 
+    res.profiles.forEach((user)=>{
+      data = JSON.stringify({
+        token: "Ri9wyv",
+        event: user.event_name,
+        customer_properties: {
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.lastname,
+          phone_number: user.phone_number,
+        }
+      })
+    })
     let config = {
       method: 'post',
       maxBodyLength: Infinity,

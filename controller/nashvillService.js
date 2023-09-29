@@ -111,12 +111,11 @@ const getMobileNumber = async (orderData) => {
     } catch (error) {
       console.error("Error:", error);
     }
-
+    getOrderData(standardizedPhoneNumber, details)
   }
-  getOrderData(standardizedPhoneNumber, details)
+ 
 
 };
-
 
 const getOrderData = async (orderData, details) => {
   try {
@@ -133,8 +132,8 @@ const getOrderData = async (orderData, details) => {
       orderId: details.orderId,
       event_name: details.event_name,
     });
-    postUserInfo(attendeeInfo,);
-    // trackKlaviyo(orderData)
+    postUserInfo(attendeeInfo);
+    trackKlaviyo(attendeeInfo)
   } catch (err) {
     console.log(err)
   }
@@ -167,7 +166,6 @@ const subscribeEvent = async (contacts) => {
 };
 
 const postUserInfo = async (req, res) => {
-  console.log(req)
   try {
     const response = await fetch(
       `${process.env.KLAVIYO_URL}/v2/list/${process.env.Nashville_List_Id}/members?api_key=${process.env.Nashville_Klaviyo_API_Key}`,
@@ -179,30 +177,29 @@ const postUserInfo = async (req, res) => {
         }
       }
     );
-
     if (response.ok) {
       await response.json();
     }
     await subscribeEvent(req);
-
   } catch (error) {
     console.error('postApi', error);
   }
 };
 
 const trackKlaviyo = (res) => {
-  res.map((events) => {
-    let data = JSON.stringify({
-      token: "SZcjpi",
-      event: events.event_name,
-      customer_properties: {
-        email: events.email,
-        first_name: events.first_name,
-        last_name: events.lastname,
-        phone_number: events.phone_number,
-      }
-    });
-
+  let data 
+    res.profiles.forEach((user)=>{
+      data = JSON.stringify({
+        token: "SZcjpi",
+        event: user.event_name,
+        customer_properties: {
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.lastname,
+          phone_number: user.phone_number,
+        }
+      })
+    })
     let config = {
       method: 'post',
       maxBodyLength: Infinity,
@@ -216,12 +213,11 @@ const trackKlaviyo = (res) => {
     axios.request(config)
       .then((response) => {
         const trackData = JSON.stringify(response.data)
-        console.log(trackData.length);
+        console.log(trackData);
       })
       .catch((error) => {
         console.log(error);
       });
-  });
 };
 
 module.exports = { getNashvilleUser };
