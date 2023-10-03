@@ -58,59 +58,59 @@ const getMobileNumber = async (orderData) => {
   let standardizedPhoneNumber;
   let details;
   for (details of orderData) {
-    const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}`;
-    const algorithm = "sha256";
-    const hash = crypto
-      .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
-      .update(dataToHash)
-      .digest("hex");
+    // const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}`;
+    // const algorithm = "sha256";
+    // const hash = crypto
+    //   .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
+    //   .update(dataToHash)
+    //   .digest("hex");
 
-    try {
-      const response = await axios.get(
-        `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
-        {
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
+    // try {
+    //   const response = await axios.get(
+    //     `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.COLUMBUS_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+    //     {
+    //       headers: {
+    //         Accept: "application/json",
+    //       },
+    //     }
+    //   );
 
-      response.data.forEach(function (values) {
-        const processItems = (items) => {
-          const normalizePhoneNumber = (mobNumber) => {
-            const digitsOnly = mobNumber.replace(/\D/g, "");
-            if (digitsOnly.length < 10) {
-              return null; // Invalid phone number
-            }
-            const countryCode =
-              digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
+    //   response.data.forEach(function (values) {
+    //     const processItems = (items) => {
+    //       const normalizePhoneNumber = (mobNumber) => {
+    //         const digitsOnly = mobNumber.replace(/\D/g, "");
+    //         if (digitsOnly.length < 10) {
+    //           return null; // Invalid phone number
+    //         }
+    //         const countryCode =
+    //           digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
 
-            const areaCode = digitsOnly.substr(countryCode.length, 3);
-            const phoneDigits = digitsOnly.substr(
-              countryCode.length + areaCode.length
-            );
+    //         const areaCode = digitsOnly.substr(countryCode.length, 3);
+    //         const phoneDigits = digitsOnly.substr(
+    //           countryCode.length + areaCode.length
+    //         );
 
-            const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-              0,
-              3
-            )}-${phoneDigits.slice(3)}`;
+    //         const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
+    //           0,
+    //           3
+    //         )}-${phoneDigits.slice(3)}`;
 
-            return formattedPhoneNumber;
-          };
+    //         return formattedPhoneNumber;
+    //       };
 
-          let phoneNumber = "11" + items.answer;
-          standardizedPhoneNumber = normalizePhoneNumber(phoneNumber);
-        };
+    //       let phoneNumber = "11" + items.answer;
+    //       standardizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+    //     };
 
-        if (values.ticket_submissions.length === 0) {
-          values.order_submissions[2].answers.forEach(processItems);
-        } else {
-          values.ticket_submissions[2].answers.forEach(processItems);
-        }
-      });
-    } catch (error) {
-      console.error("Error:", error);
-    }
+    //     if (values.ticket_submissions.length === 0) {
+    //       values.order_submissions[2].answers.forEach(processItems);
+    //     } else {
+    //       values.ticket_submissions[2].answers.forEach(processItems);
+    //     }
+    //   });
+    // } catch (error) {
+    //   console.error("Error:", error);
+    // }
        getOrderData(standardizedPhoneNumber, details)
   }
   

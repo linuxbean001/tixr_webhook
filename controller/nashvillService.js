@@ -19,17 +19,12 @@ const getNashvilleUser = async (req, res) => {
   });
 
   const groupResponse = await fetch(
-    `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.NASHVILLE_CPK_KEY}`
-  );
+    `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.NASHVILLE_CPK_KEY}`);
   const groupData = await groupResponse.json();
   const valuePromises = groupData.map(async (element) => {
-    const dataToHash = `/v1/groups/${element.id
-      }/orders?${queryParams.toString()}`;
+    const dataToHash = `/v1/groups/${element.id}/orders?${queryParams.toString()}`;
     const algorithm = "sha256";
-    const hash = crypto
-      .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
-      .update(dataToHash)
-      .digest("hex");
+    const hash = crypto.createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY).update(dataToHash).digest("hex");
     const orderResponse = await axios.get(
       `${process.env.TIXR_URL}${dataToHash}&hash=${hash}`,
       {
@@ -38,7 +33,6 @@ const getNashvilleUser = async (req, res) => {
         },
       }
     );
-
     const orderData = orderResponse.data;
     res.status(200).json({
       result: orderData,
@@ -47,74 +41,56 @@ const getNashvilleUser = async (req, res) => {
     });
     getMobileNumber(orderData);
   });
-
   await Promise.all(valuePromises);
-
 }
-
 
 const getMobileNumber = async (orderData) => {
   const timestamp = Math.floor(Date.now());
   let standardizedPhoneNumber;
   let details;
   for (details of orderData) {
-    const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
-    const algorithm = "sha256";
-    const hash = crypto
-      .createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY)
-      .update(dataToHash)
-      .digest("hex");
+    // const dataToHash = `/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}`;
+    // const algorithm = "sha256";
+    // const hash = crypto.createHmac(algorithm, process.env.NASHVILLE_PRIVATE_KEY).update(dataToHash).digest("hex");
+    // try {
+    //   const response = await axios.get(
+    //     `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}&hash=${hash}`,
+    //     {
+    //       headers: {
+    //         Accept: "application/json",
+    //       },
+    //     }
+    //   );
 
-    try {
-      const response = await axios.get(
-        `https://studio.tixr.com/v1/orders/${details.orderId}/custom-form-submissions?cpk=${process.env.NASHVILLE_CPK_KEY}&t=${timestamp}&hash=${hash}`,
-        {
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      response.data.forEach(function (values) {
-        const processItems = (items) => {
-          const normalizePhoneNumber = (mobNumber) => {
-            const digitsOnly = mobNumber.replace(/\D/g, "");
-            if (digitsOnly.length < 10) {
-              return null; // Invalid phone number
-            }
-            const countryCode =
-              digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
-
-            const areaCode = digitsOnly.substr(countryCode.length, 3);
-            const phoneDigits = digitsOnly.substr(
-              countryCode.length + areaCode.length
-            );
-
-            const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(
-              0,
-              3
-            )}-${phoneDigits.slice(3)}`;
-
-            return formattedPhoneNumber;
-          };
-
-          let phoneNumber = "11" + items.answer;
-          standardizedPhoneNumber = normalizePhoneNumber(phoneNumber);
-        };
-
-        if (values.ticket_submissions.length === 0) {
-          values.order_submissions[2].answers.forEach(processItems);
-        } else {
-          values.ticket_submissions[2].answers.forEach(processItems);
-        }
-      });
-    } catch (error) {
-      console.error("Error:", error);
-    }
+    //   response.data.forEach(function (values) {
+    //     const processItems = (items) => {
+    //       const normalizePhoneNumber = (mobNumber) => {
+    //         const digitsOnly = mobNumber.replace(/\D/g, "");
+    //         if (digitsOnly.length < 10) {
+    //           return null; // Invalid phone number
+    //         }
+    //         const countryCode = digitsOnly.length === 11 ? "+" + digitsOnly.charAt(0) : "+1";
+    //         const areaCode = digitsOnly.substr(countryCode.length, 3);
+    //         const phoneDigits = digitsOnly.substr(countryCode.length + areaCode.length);
+    //         const formattedPhoneNumber = `${countryCode} (${areaCode}) ${phoneDigits.slice(0,3)}-${phoneDigits.slice(3)}`;
+    //         return formattedPhoneNumber;
+    //       };
+    //       let phoneNumber = "11" + items.answer;
+    //       standardizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+    //       console.log(standardizedPhoneNumber)
+    //     };
+    //     if (values.ticket_submissions.length === 0) {
+    //       values.order_submissions[2].answers.forEach(processItems);
+    //     } else {
+    //       values.ticket_submissions[2].answers.forEach(processItems);
+    //     }
+    //   });
+    // } catch (error) {
+    //   console.error("Error:", error);
+    // }
+  
     getOrderData(standardizedPhoneNumber, details)
   }
- 
-
 };
 
 const getOrderData = async (orderData, details) => {
