@@ -40,6 +40,7 @@ const getCincinnatiUser = async (req, res) => {
     );
 
     const orderData = orderResponse.data;
+    console.log(orderData)
     res.status(200).json({
       result: orderData,
       success: true,
@@ -123,7 +124,7 @@ const getOrderData = async (orderData, details) => {
       first_name: details.first_name,
       last_name: details.lastname,
       email: details.email,
-      phone_number: orderData || "",
+      // phone_number: orderData || "",
       $city: details?.geo_info?.city || "",
       latitude: details?.geo_info?.latitude || "",
       longitude: details?.geo_info?.longitude || "",
@@ -165,26 +166,46 @@ const subscribeEvent = async (contacts) => {
   }
 };
 
+// const postUserInfo = async (req, res) => {
+//   try {
+//     const response = await fetch(
+//       `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
+//       {
+//         method: 'POST',
+//         body: JSON.stringify(req),
+//         headers: {
+//           'Content-Type': 'application/json'
+//         }
+//       }
+//     );
+
+//     if (response.ok) {
+//       await response.json();
+//     }
+//     await subscribeEvent(req);
+
+//   } catch (error) {
+//     console.error('postApi', error);
+//   }
+// };
 const postUserInfo = async (req, res) => {
+  setTimeout(()=>{
+    subscribeEvent(req);
+  },5000)
+
   try {
-    const response = await fetch(
-      `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(req),
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    await axios
+      .post(
+        `${process.env.KLAVIYO_URL}/v2/list/${process.env.CINCINNATI_List_Id}/members?api_key=${process.env.CINCINNATI_Klaviyo_API_Key}`,
+        req
+      )
+      .then((data) => {
+        console.log(data)
+      });
 
-    if (response.ok) {
-      await response.json();
-    }
-    await subscribeEvent(req);
-
+    return { success: true, message: "Attendee Details Post wait" }; // Return the response data
   } catch (error) {
-    console.error('postApi', error);
+    console.log(error)
   }
 };
 

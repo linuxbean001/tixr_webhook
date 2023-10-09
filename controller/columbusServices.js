@@ -7,48 +7,54 @@ const attendeeInfo = {
 };
 
 const getColumbusUser = async (req, res) => {
-  const timestamp = Math.floor(Date.now());
-  const queryParams = new URLSearchParams({
-    cpk: process.env.COLUMBUS_CPK_KEY,
-    end_date: req.query.end_date || moment().add(1, 'days').format('YYYY-MM-D'),
-    page_number: req.query.page || 1,
-    page_size: req.query.page_size || 100,
-    start_date: req.query.start_date || moment().format('YYYY-MM-D'),
-    status: "",
-    t: timestamp,
-  });
-
-  const groupResponse = await fetch(
-    `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.COLUMBUS_CPK_KEY}`
-  );
-  const groupData = await groupResponse.json();
-  const valuePromises = groupData.map(async (element) => {
-    const dataToHash = `/v1/groups/${element.id
-      }/orders?${queryParams.toString()}`;
-    const algorithm = "sha256";
-    const hash = crypto
-      .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
-      .update(dataToHash)
-      .digest("hex");
-    const orderResponse = await axios.get(
-      `${process.env.TIXR_URL}${dataToHash}&hash=${hash}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-      }
-    );
-
-    const orderData = orderResponse.data;
-    res.status(200).json({
-      result: orderData,
-      success: true,
-      message: `Total Record ${orderData.length}`
+  try {
+    const timestamp = Math.floor(Date.now());
+    const queryParams = new URLSearchParams({
+      cpk: process.env.COLUMBUS_CPK_KEY,
+      end_date: req.query.end_date || moment().add(1, 'days').format('YYYY-MM-D'),
+      page_number: req.query.page || 1,
+      page_size: req.query.page_size || 100,
+      start_date: req.query.start_date || moment().format('YYYY-MM-D'),
+      status: "",
+      t: timestamp,
     });
-    getMobileNumber(orderData);
-  });
 
-  await Promise.all(valuePromises);
+    const groupResponse = await fetch(
+      `${process.env.TIXR_URL}/v1/groups?cpk=${process.env.COLUMBUS_CPK_KEY}`
+    );
+    const groupData = await groupResponse.json();
+    const valuePromises = groupData.map(async (element) => {
+      const dataToHash = `/v1/groups/${element.id
+        }/orders?${queryParams.toString()}`;
+      const algorithm = "sha256";
+      const hash = crypto
+        .createHmac(algorithm, process.env.COLUMBUS_PRIVATE_KEY)
+        .update(dataToHash)
+        .digest("hex");
+      const orderResponse = await axios.get(
+        `${process.env.TIXR_URL}${dataToHash}&hash=${hash}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const orderData = orderResponse.data;
+      res.status(200).json({
+        result: orderData,
+        success: true,
+        message: `Total Record ${orderData.length}`
+      });
+      getMobileNumber(orderData);
+    });
+
+    await Promise.all(valuePromises);
+
+  } catch {
+    res.status(500);
+  }
+
 
 }
 
@@ -111,9 +117,9 @@ const getMobileNumber = async (orderData) => {
     // } catch (error) {
     //   console.error("Error:", error);
     // }
-       getOrderData(standardizedPhoneNumber, details)
+    getOrderData(standardizedPhoneNumber, details)
   }
-  
+
 };
 
 
@@ -123,7 +129,7 @@ const getOrderData = async (orderData, details) => {
       first_name: details.first_name,
       last_name: details.lastname,
       email: details.email,
-      phone_number: orderData || "",
+      // phone_number: orderData || "",
       $city: details?.geo_info?.city || "",
       latitude: details?.geo_info?.latitude || "",
       longitude: details?.geo_info?.longitude || "",
@@ -166,6 +172,7 @@ const subscribeEvent = async (contacts) => {
 };
 
 const postUserInfo = async (req, res) => {
+  console.log(req)
   try {
     const response = await fetch(
       `${process.env.KLAVIYO_URL}/v2/list/${process.env.COLUMBUS_List_Id}/members?api_key=${process.env.Columbus_Klaviyo_API_Key}`,
@@ -189,37 +196,37 @@ const postUserInfo = async (req, res) => {
 };
 
 const trackKlaviyo = (res) => {
-  let data 
-    res.profiles.forEach((user)=>{
-      data = JSON.stringify({
-        token: "Ri9wyv",
-        event: user.event_name,
-        customer_properties: {
-          email: user.email,
-          first_name: user.first_name,
-          last_name: user.lastname,
-          phone_number: user.phone_number,
-        }
-      })
+  let data
+  res.profiles.forEach((user) => {
+    data = JSON.stringify({
+      token: "Ri9wyv",
+      event: user.event_name,
+      customer_properties: {
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.lastname,
+        phone_number: user.phone_number,
+      }
     })
-    let config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: 'https://a.klaviyo.com/api/track',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      data: data
-    };
+  })
+  let config = {
+    method: 'post',
+    maxBodyLength: Infinity,
+    url: 'https://a.klaviyo.com/api/track',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    data: data
+  };
 
-    axios.request(config)
-      .then((response) => {
-        const trackData = JSON.stringify(response.data)
-        console.log(trackData);
-      })
-      .catch((error) => {
-        console.log(error);
-      });
+  axios.request(config)
+    .then((response) => {
+      const trackData = JSON.stringify(response.data)
+      console.log(trackData);
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 };
 
 module.exports = { getColumbusUser };
